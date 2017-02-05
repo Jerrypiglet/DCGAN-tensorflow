@@ -519,7 +519,7 @@ def train(gan):
 				write_to_screen()
 
 			feed_dict = next_feed_dict()
-			_, merged = sess.run([gan.opt_g, gan.merged_summary], feed_dict=feed_dict)
+			_, merged = gan.sess.run([gan.opt_g, gan.merged_summary], feed_dict=feed_dict)
 				 # options=run_options, run_metadata=run_metadata)
 			gan.train_writer.add_summary(merged, i)
 			# gan.train_writer.add_run_metadata(
