@@ -447,7 +447,7 @@ class VariationalAutoencoder(object):
 				summary_accuracy_test, summary_precision_test, summary_recall_test]
 			self.merged_summaries_test = tf.merge_summary(summaries_test)
 
-	def BatchNorm(self, inputT, trainable, scope=None):
+	def BatchNorm(self, inputT, trainable, is_training, scope=None):
 		# Note: is_training is tf.placeholder(tf.bool) type
 		# return tf.cond(self.is_training,
 		# 	lambda: batch_norm(inputT, is_training=True,
