@@ -162,13 +162,15 @@ class VariationalAutoencoder(object):
 			self.z_sum = tf.histogram_summary("z", self.z)
 
 			# self.flatten_length = 2048
-
-			self.D_logits = self._discriminator(self.x0)
+			with tf.variable_scope("discriminator") as scope:
+				self.D_logits = self._discriminator(self.x0)
 			self.G, self.G_noGate = self._generator(self.z)
 			self.G_sum = tf.histogram_summary("G", tf.reshape(self.G_noGate, [-1]))
 
 		with tf.device('/gpu:0'):
-			self.D_logits_ = self._discriminator(self.G, reuse=True)
+			with tf.variable_scope("discriminator") as scope:
+				scope.reuse_variables()
+				self.D_logits_ = self._discriminator(self.G, reuse=True)
 
 	def _create_loss_optimizer(self):
 		self.d_loss_real = tf.reduce_mean(
@@ -228,57 +230,53 @@ class VariationalAutoencoder(object):
 		# return tensorpack.models.BatchNorm(inputT)
 
 	def _discriminator(self, input_tensor, trainable=True, reuse=False):
-		with tf.variable_scope("discriminator") as scope:
-			if reuse:
-				scope.reuse_variables()
+		input_shape=[None, 27000]
+		x_tensor = tf.reshape(input_tensor, [-1, 30, 30, 30, 1])
+		current_input = x_tensor
 
-			input_shape=[None, 27000]
-			x_tensor = tf.reshape(input_tensor, [-1, 30, 30, 30, 1])
-			current_input = x_tensor
-
-			def conv_layer(current_input, kernel_shape, strides, scope, transfer_fct, is_training, if_batch_norm, padding, trainable):
-				# kernel = tf.truncated_normal(kernel_shape, dtype=tf.float32, stddev=1e-3)
-				# kernel = tf.Variable(
-				# 	tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
-				# 	trainable=trainable)
-				kernel = tf.Variable(tf.random_normal(kernel_shape, stddev=0.02), trainable=trainable)
-				biases = tf.Variable(tf.zeros(shape=[kernel_shape[-1]], dtype=tf.float32), trainable=trainable)
-				if if_batch_norm:
-					current_output = transfer_fct(
-						self.BatchNorm(
-							tf.add(tf.nn.conv3d(current_input, kernel, strides, padding), biases),
-							trainable=trainable, scope=scope, reuse=None
-							)
+		def conv_layer(current_input, kernel_shape, strides, scope, transfer_fct, is_training, if_batch_norm, padding, trainable):
+			# kernel = tf.truncated_normal(kernel_shape, dtype=tf.float32, stddev=1e-3)
+			# kernel = tf.Variable(
+			# 	tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
+			# 	trainable=trainable)
+			kernel = tf.Variable(tf.random_normal(kernel_shape, stddev=0.02), trainable=trainable)
+			biases = tf.Variable(tf.zeros(shape=[kernel_shape[-1]], dtype=tf.float32), trainable=trainable)
+			if if_batch_norm:
+				current_output = transfer_fct(
+					self.BatchNorm(
+						tf.add(tf.nn.conv3d(current_input, kernel, strides, padding), biases),
+						trainable=trainable, scope=scope, reuse=None
 						)
-				else:
-					current_output = transfer_fct(
-							tf.nn.bias_add(tf.nn.conv3d(current_input, kernel, strides, padding), biases),
-						)
-				return current_output
-			def transfer_fct_none(x):
-				return x
+					)
+			else:
+				current_output = transfer_fct(
+						tf.nn.bias_add(tf.nn.conv3d(current_input, kernel, strides, padding), biases),
+					)
+			return current_output
+		def transfer_fct_none(x):
+			return x
 
-			current_input = conv_layer(current_input, [4, 4, 4, 1, 32], [1, 2, 2, 2, 1], 'BN-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN_D, padding="SAME", trainable=trainable)
-			print current_input.get_shape().as_list()
-			current_input = conv_layer(current_input, [4, 4, 4, 32, 64], [1, 2, 2, 2, 1], 'BN-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN_D, padding="SAME", trainable=trainable)
-			print current_input.get_shape().as_list()
-			current_input = conv_layer(current_input, [4, 4, 4, 64, 128], [1, 2, 2, 2, 1], 'BN-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN_D, padding="SAME", trainable=trainable)
-			print current_input.get_shape().as_list()
-			current_input = conv_layer(current_input, [4, 4, 4, 128, 256], [1, 2, 2, 2, 1], 'BN-3', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN_D, padding="SAME", trainable=trainable)
-			print current_input.get_shape().as_list()
-			# current_input = conv_layer(current_input, [4, 4, 4, 512, 1], [1, 1, 1, 1, 1], 'BN-4', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
-			# print current_input.get_shape().as_list()
+		current_input = conv_layer(current_input, [4, 4, 4, 1, 32], [1, 2, 2, 2, 1], 'BN-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN_D, padding="SAME", trainable=trainable)
+		print current_input.get_shape().as_list()
+		current_input = conv_layer(current_input, [4, 4, 4, 32, 64], [1, 2, 2, 2, 1], 'BN-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN_D, padding="SAME", trainable=trainable)
+		print current_input.get_shape().as_list()
+		current_input = conv_layer(current_input, [4, 4, 4, 64, 128], [1, 2, 2, 2, 1], 'BN-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN_D, padding="SAME", trainable=trainable)
+		print current_input.get_shape().as_list()
+		current_input = conv_layer(current_input, [4, 4, 4, 128, 256], [1, 2, 2, 2, 1], 'BN-3', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN_D, padding="SAME", trainable=trainable)
+		print current_input.get_shape().as_list()
+		# current_input = conv_layer(current_input, [4, 4, 4, 512, 1], [1, 1, 1, 1, 1], 'BN-4', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+		# print current_input.get_shape().as_list()
 
-			self.before_flatten_shape = current_input.get_shape().as_list()
-			self.flatten_shape = tf.pack([-1, np.prod(current_input.get_shape().as_list() [1:])])
-			flattened = tf.reshape(current_input, self.flatten_shape)
-			self.flatten_length = flattened.get_shape().as_list()[1]
+		self.before_flatten_shape = current_input.get_shape().as_list()
+		self.flatten_shape = tf.pack([-1, np.prod(current_input.get_shape().as_list() [1:])])
+		flattened = tf.reshape(current_input, self.flatten_shape)
+		self.flatten_length = flattened.get_shape().as_list()[1]
 
-			print '---------- _>>> discriminator: flatten length:', self.flatten_length
-			hidden_tensor = tf.contrib.layers.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm)
-			hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm)
-			hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, 1, activation_fn=None, trainable=trainable)
-			return hidden_tensor
+		print '---------- _>>> discriminator: flatten length:', self.flatten_length
+		hidden_tensor = tf.contrib.layers.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm)
+		hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm)
+		hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, 1, activation_fn=None, trainable=trainable)
+		return hidden_tensor
 
 	def _generator(self, input_sample, trainable=True):
 		with tf.variable_scope("generator") as scope:
