@@ -236,7 +236,8 @@ class VariationalAutoencoder(object):
 
 		## Define decoder0
 		with tf.device('/gpu:2'):
-			z0_for_recon = tf.cond(self.train_net, lambda: self.z0, lambda: self.z)
+			# z0_for_recon = tf.cond(self.train_net, lambda: self.z0, lambda: self.z)
+			z0_for_recon = self.z0
 			with tf.variable_scope("decoder0"):
 				with slim.arg_scope([slim.fully_connected], trainable=(FLAGS.train_net or FLAGS.if_unlock_decoder0)):
 					self.x0_recon = self._z_2_x_conv(z0_for_recon, trainable=(FLAGS.train_net or FLAGS.if_unlock_decoder0))	
