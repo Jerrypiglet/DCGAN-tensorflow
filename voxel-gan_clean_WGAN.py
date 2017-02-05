@@ -62,7 +62,8 @@ flags.DEFINE_string("data_train_net0", "", "load train data from")
 flags.DEFINE_string("data_test_net0", "", "load test data from")
 flags.DEFINE_string("data_train_net1", "", "load train data from")
 flags.DEFINE_string("data_test_net1", "", "load test data from")
-flags.DEFINE_boolean("if_BN", False, "if batch_norm")
+flags.DEFINE_boolean("if_BN_G", True, "if batch_norm")
+flags.DEFINE_boolean("if_BN_D", True, "if batch_norm")
 flags.DEFINE_boolean("if_BN_out", False, "if batch_norm for x output layer")
 flags.DEFINE_boolean("if_show", True, "if show mode")
 flags.DEFINE_boolean("if_unlock_decoder0", False, "if unlock decoder0")
@@ -251,13 +252,13 @@ class VariationalAutoencoder(object):
 				def transfer_fct_none(x):
 					return x
 
-				current_input = conv_layer(current_input, [4, 4, 4, 1, 32], [1, 2, 2, 2, 1], 'BN-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+				current_input = conv_layer(current_input, [4, 4, 4, 1, 32], [1, 2, 2, 2, 1], 'BN-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN_D, padding="SAME", trainable=trainable)
 				print current_input.get_shape().as_list()
-				current_input = conv_layer(current_input, [4, 4, 4, 32, 64], [1, 2, 2, 2, 1], 'BN-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+				current_input = conv_layer(current_input, [4, 4, 4, 32, 64], [1, 2, 2, 2, 1], 'BN-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN_D, padding="SAME", trainable=trainable)
 				print current_input.get_shape().as_list()
-				current_input = conv_layer(current_input, [4, 4, 4, 64, 128], [1, 2, 2, 2, 1], 'BN-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+				current_input = conv_layer(current_input, [4, 4, 4, 64, 128], [1, 2, 2, 2, 1], 'BN-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN_D, padding="SAME", trainable=trainable)
 				print current_input.get_shape().as_list()
-				current_input = conv_layer(current_input, [4, 4, 4, 128, 256], [1, 2, 2, 2, 1], 'BN-3', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+				current_input = conv_layer(current_input, [4, 4, 4, 128, 256], [1, 2, 2, 2, 1], 'BN-3', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN_D, padding="SAME", trainable=trainable)
 				print current_input.get_shape().as_list()
 				# current_input = conv_layer(current_input, [4, 4, 4, 512, 1], [1, 1, 1, 1, 1], 'BN-4', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 				# print current_input.get_shape().as_list()
@@ -309,16 +310,97 @@ class VariationalAutoencoder(object):
 				return current_output
 			def transfer_fct_none(x):
 				return x
-			current_input = deconv_layer(current_input, [4, 4, 4, 128, 256], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 4, 4, 4, 128]), 'BN-deconv-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+			current_input = deconv_layer(current_input, [4, 4, 4, 128, 256], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 4, 4, 4, 128]), 'BN-deconv-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN_G, padding="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
-			current_input = deconv_layer(current_input, [4, 4, 4, 64, 128], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 8, 8, 8, 64]), 'BN-deconv-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding ="SAME", trainable=trainable)
+			current_input = deconv_layer(current_input, [4, 4, 4, 64, 128], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 8, 8, 8, 64]), 'BN-deconv-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN_G, padding ="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
-			current_input = deconv_layer(current_input, [4, 4, 4, 32, 64], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 15, 15, 15, 32]), 'BN-deconv-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+			current_input = deconv_layer(current_input, [4, 4, 4, 32, 64], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 15, 15, 15, 32]), 'BN-deconv-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN_G, padding="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
 			current_input = deconv_layer(current_input, [4, 4, 4, 1, 32], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 30, 30, 30, 1]), 'BN-deconv-3', transfer_fct_none, is_training=self.is_training, if_batch_norm=False, padding="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
 			print '---------- _<<< generator: flatten length:', self.flatten_length
 			return (tf.nn.sigmoid(current_input), current_input)
+
+def train(gan):
+	prepare_for_training(gan)
+	# sample_z = np.random.uniform(-1, 1, size=(gan.batch_size, gan.z_size))
+	i = 0
+	try:
+		while not gan.coord.should_stop():
+			def next_feed_dict():
+				batch_z = np.random.normal(0., 1., [gan.batch_size, gan.z_size]) \
+								.astype(np.float32)
+				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True}
+				return feed_dict
+
+			def write_to_screen(merged):
+				start_time = time.time()
+				feed_dict = next_feed_dict()
+				G, d_loss, g_loss, step = gan.sess.run([gan.G, gan.d_loss, gan.g_loss, gan.global_step], feed_dict=feed_dict)
+
+				gan.train_writer.add_summary(merged, step)
+
+				epoch_show = math.floor(float(step) * FLAGS.models_in_batch / float(num_samples))
+				batch_show = math.floor(step - epoch_show * (num_samples / FLAGS.models_in_batch))
+
+				if FLAGS.if_summary:
+					gan.train_writer.flush()
+					if FLAGS.train_net:
+						print "i", '%03d' % (i), "STEP", '%03d' % (step), "Epo", '%03d' % (epoch_show), "ba", '%03d' % (batch_show), \
+						"d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)
+
+				if FLAGS.if_save and step != 0 and step % FLAGS.save_every_step == 0:
+					save_gan(gan, step, epoch_show, batch_show)
+
+				if FLAGS.if_draw and step % FLAGS.draw_every == 0:
+					print 'Drawing reconstructed sample from testing batch...'
+					plt.figure(1)
+					print G.shape
+					for test_idx in range(2):
+						im = draw_sample(figM, G[test_idx].reshape((30, 30, 30)), ms)
+						plt.subplot(1, 2, test_idx+1)
+						plt.imshow(im)
+						plt.axis('off')
+					pltfig_3d.suptitle('Reconstructed models at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
+					pltfig_3d.canvas.draw()
+					pltfig_3d.savefig('./saved_images/%d-pltfig_3d_recon.png'%step)
+				end_time = time.time()
+				elapsed = end_time - start_time
+				print "--- Time %f seconds."%elapsed
+
+			if i < 25 or i % 500 == 0:
+				citers = 100
+			else:
+				citers = gan.Citers
+			for j in range(citers):
+				feed_dict = next_feed_dict()
+				# run_options = tf.RunOptions(
+				# 	trace_level=tf.RunOptions.FULL_TRACE)
+				# run_metadata = tf.RunMetadata()
+				_, merged = gan.sess.run([gan.opt_c, gan.merged_summary], feed_dict=feed_dict)
+									 # options=run_options, run_metadata=run_metadata)
+				# gan.train_writer.add_summary(merged, i)
+				# gan.train_writer.add_run_metadata(
+				# 	run_metadata, 'critic_metadata {}'.format(i), i)
+				write_to_screen(merged)
+
+			feed_dict = next_feed_dict()
+			_, merged = gan.sess.run([gan.opt_g, gan.merged_summary], feed_dict=feed_dict)
+				 # options=run_options, run_metadata=run_metadata)
+			# gan.train_writer.add_summary(merged, i)
+			# gan.train_writer.add_run_metadata(
+			# 	run_metadata, 'generator_metadata {}'.format(i), i)
+			write_to_screen(merged)
+
+			i = i + 1
+	except tf.errors.OutOfRangeError:
+		print('Done training.')
+	finally:
+		# When done, ask the threads to stop.
+		gan.coord.request_stop()
+	# Wait for threads to finish.
+	gan.coord.join(gan.threads)
+	gan.sess.close()
 
 def draw_sample(fig, data, ms, colormap='rainbow', camera_view=False, p=None):
 	# data = np.reshape(data, (30, 30, 30))
@@ -464,86 +546,6 @@ def prepare_for_training(gan):
 	tsne_model = TSNE(n_components=2, random_state=0, init='pca')
 	print '+++++ prepare_for_training finished.'
 
-def train(gan):
-	prepare_for_training(gan)
-	# sample_z = np.random.uniform(-1, 1, size=(gan.batch_size, gan.z_size))
-	i = 0
-	try:
-		while not gan.coord.should_stop():
-			def next_feed_dict():
-				batch_z = np.random.normal(0., 1., [gan.batch_size, gan.z_size]) \
-								.astype(np.float32)
-				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True}
-				return feed_dict
-
-			def write_to_screen(merged):
-				start_time = time.time()
-				feed_dict = next_feed_dict()
-				G, d_loss, g_loss, step = gan.sess.run([gan.G, gan.d_loss, gan.g_loss, gan.global_step], feed_dict=feed_dict)
-
-				gan.train_writer.add_summary(merged, step)
-
-				epoch_show = math.floor(float(step) * FLAGS.models_in_batch / float(num_samples))
-				batch_show = math.floor(step - epoch_show * (num_samples / FLAGS.models_in_batch))
-
-				if FLAGS.if_summary:
-					gan.train_writer.flush()
-					if FLAGS.train_net:
-						print "i", '%03d' % (i), "STEP", '%03d' % (step), "Epo", '%03d' % (epoch_show), "ba", '%03d' % (batch_show), \
-						"d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)
-
-				if FLAGS.if_save and step != 0 and step % FLAGS.save_every_step == 0:
-					save_gan(gan, step, epoch_show, batch_show)
-
-				if FLAGS.if_draw and step % FLAGS.draw_every == 0:
-					print 'Drawing reconstructed sample from testing batch...'
-					plt.figure(1)
-					print G.shape
-					for test_idx in range(2):
-						im = draw_sample(figM, G[test_idx].reshape((30, 30, 30)), ms)
-						plt.subplot(1, 2, test_idx+1)
-						plt.imshow(im)
-						plt.axis('off')
-					pltfig_3d.suptitle('Reconstructed models at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
-					pltfig_3d.canvas.draw()
-					pltfig_3d.savefig('./saved_images/%d-pltfig_3d_recon.png'%step)
-				end_time = time.time()
-				elapsed = end_time - start_time
-				print "--- Time %f seconds."%elapsed
-
-			if i < 25 or i % 500 == 0:
-				citers = 100
-			else:
-				citers = gan.Citers
-			for j in range(citers):
-				feed_dict = next_feed_dict()
-				# run_options = tf.RunOptions(
-				# 	trace_level=tf.RunOptions.FULL_TRACE)
-				# run_metadata = tf.RunMetadata()
-				_, merged = gan.sess.run([gan.opt_c, gan.merged_summary], feed_dict=feed_dict)
-									 # options=run_options, run_metadata=run_metadata)
-				# gan.train_writer.add_summary(merged, i)
-				# gan.train_writer.add_run_metadata(
-				# 	run_metadata, 'critic_metadata {}'.format(i), i)
-				write_to_screen(merged)
-
-			feed_dict = next_feed_dict()
-			_, merged = gan.sess.run([gan.opt_g, gan.merged_summary], feed_dict=feed_dict)
-				 # options=run_options, run_metadata=run_metadata)
-			# gan.train_writer.add_summary(merged, i)
-			# gan.train_writer.add_run_metadata(
-			# 	run_metadata, 'generator_metadata {}'.format(i), i)
-			write_to_screen(merged)
-
-			i = i + 1
-	except tf.errors.OutOfRangeError:
-		print('Done training.')
-	finally:
-		# When done, ask the threads to stop.
-		gan.coord.request_stop()
-	# Wait for threads to finish.
-	gan.coord.join(gan.threads)
-	gan.sess.close()
 
 def save_gan(gan, step, epoch, batch):
 	if FLAGS.train_net:
