@@ -373,7 +373,7 @@ class VariationalAutoencoder(object):
 
 		# slim.get_variables_to_restore(include=["encoder0","decoder0","step"])
 
-		self.d_optim = tf.train.AdamOptimizer(1e-5, beta1=FLAGS.beta1) \
+		self.d_optim = tf.train.AdamOptimizer(1e-4, beta1=FLAGS.beta1) \
 							.minimize(self.d_loss, var_list=self.d_vars)
 		self.g_optim = tf.train.AdamOptimizer(1e-3, beta1=FLAGS.beta1) \
 							.minimize(self.g_loss, var_list=self.g_vars)
@@ -750,7 +750,7 @@ def train(gan):
 					plt.axis('off')
 				pltfig_3d.suptitle('Reconstructed models at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
 				pltfig_3d.canvas.draw()
-				pltfig_3d.savefig(params['summary_folder']+'/%d-pltfig_3d_recon.png'%step)
+				pltfig_3d.savefig('./samples/%d-pltfig_3d_recon.png'%step)
 				# if FLAGS.train_net == False:
 				# 	plt.figure(5)
 				# 	for test_idx in range(15):
