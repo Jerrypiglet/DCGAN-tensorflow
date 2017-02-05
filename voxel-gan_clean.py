@@ -38,9 +38,10 @@ flags.DEFINE_integer("n_z", 20, "hidden size")
 flags.DEFINE_integer("batch_size", 200, "batch_size")
 flags.DEFINE_integer("models_in_batch", 40, "models in a batch")
 flags.DEFINE_float("learning_rate", 0.001, "learning rate")
+flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
 flags.DEFINE_float("reweight_recon", 1.0, "weight for recon loss")
 flags.DEFINE_float("reweight_reproj", 0.0, "weight for reproj loss")
-flags.DEFINE_float("reweight_vae", 1.0, "weight for vae loss")
+flags.DEFINE_float("reweight_gan", 1.0, "weight for gan loss")
 flags.DEFINE_float("reweight_euc_s", 1.0, "weigth for euc loss of style")
 flags.DEFINE_float("reweight_euc_p", 1.0, "weigth for euc loss of pose")
 flags.DEFINE_string("folder_name_restore_from", "", "name of restore folder")
@@ -145,182 +146,221 @@ class VariationalAutoencoder(object):
 
 		with tf.device('/gpu:0'):
 			## Define net 0
-			self.x0 = tf.cond(self.train_net, lambda: self.gen.x0_batch, lambda: self.gen.x_gnd_batch) # aligned models
+			# self.x0 = tf.cond(self.train_net, lambda: self.gen.x0_batch, lambda: self.gen.x_gnd_batch) # aligned models
+			self.x0 = self.gen.x0_batch # aligned models
 			self.x0 = tf.transpose(self.x0, perm=[0, 2, 3, 1, 4])
-			self.x0_flatten = tf.reshape(self.x0, [-1, 27000])
+			# self.x0_flatten = tf.reshape(self.x0, [-1, 27000])
 			self.dyn_batch_size_x0 = tf.shape(self.x0)[0]
-			with tf.variable_scope("encoder0"):
-				with slim.arg_scope([slim.fully_connected], trainable=FLAGS.train_net):
-					self.x0_reduce = self._x_2_z_conv(self.x0_flatten, trainable=FLAGS.train_net)
-					self.z0_mean = self._fcAfter_x_2_z_conv(self.x0_reduce, self.z_size, trainable=FLAGS.train_net)
-					self.z0_mean = tf.clip_by_value(self.z0_mean, -50., 50.)
-					self.z0_log_sigma_sq = self._fcAfter_x_2_z_conv(self.x0_reduce, self.z_size, trainable=FLAGS.train_net)
-					self.z0_log_sigma_sq = tf.clip_by_value(self.z0_log_sigma_sq, -50., 10.)
-					eps0 = tf.random_normal(tf.pack([self.dyn_batch_size_x0, self.z_size]))
-					self.z0 = self.z0_mean + eps0 * tf.sqrt(tf.exp(self.z0_log_sigma_sq))
 
-		## Define decoder0
-		with tf.device('/gpu:2'):
-			# z0_for_recon = tf.cond(self.train_net, lambda: self.z0, lambda: self.z)
-			z0_for_recon = self.z0
-			with tf.variable_scope("decoder0"):
-				with slim.arg_scope([slim.fully_connected], trainable=(FLAGS.train_net or FLAGS.if_unlock_decoder0)):
-					self.x0_recon = self._z_2_x_conv(z0_for_recon, trainable=(FLAGS.train_net or FLAGS.if_unlock_decoder0))	
+			# self.x0_reduce = self._discriminator(self.x0_flatten, trainable=FLAGS.train_net)
+			# self.z0_mean = self._fcAfter_discriminator(self.x0_reduce, self.z_size, trainable=FLAGS.train_net)
+			# self.z0_mean = tf.clip_by_value(self.z0_mean, -50., 50.)
+			# self.z0_log_sigma_sq = self._fcAfter_discriminator(self.x0_reduce, self.z_size, trainable=FLAGS.train_net)
+			# self.z0_log_sigma_sq = tf.clip_by_value(self.z0_log_sigma_sq, -50., 10.)
+			# eps0 = tf.random_normal(tf.pack([self.dyn_batch_size_x0, self.z_size]))
+			# self.z0 = self.z0_mean + eps0 * tf.sqrt(tf.exp(self.z0_log_sigma_sq))
+
+		# ## Define decoder0
+		# with tf.device('/gpu:2'):
+		# 	# z0_for_recon = tf.cond(self.train_net, lambda: self.z0, lambda: self.z)
+		# 	z0_for_recon = self.z0
+		# 	with tf.variable_scope("decoder0"):
+		# 		with slim.arg_scope([slim.fully_connected], trainable=(FLAGS.train_net or FLAGS.if_unlock_decoder0)):
+		# 			self.x0_recon = self._generator(z0_for_recon, trainable=(FLAGS.train_net or FLAGS.if_unlock_decoder0))	
+
+		with tf.device('/gpu:0'):
+			self.z = tf.placeholder(
+			tf.float32, [None, self.z_size], name='z')
+			self.z_sum = histogram_summary("z", self.z)
+			self.G = self.generator(self.z)
+
+		with tf.device('/gpu:0'):
+			self.D, self.D_logits = self.discriminator(self.x0)
+			self.D_, self.D_logits_ = self.discriminator(self.G, reuse=True)
+			self.d_sum = histogram_summary("d", self.D)
+			self.d__sum = histogram_summary("d_", self.D_)
+			self.G_sum = image_summary("G", self.G)
 
 	def _create_loss_optimizer(self):
-		with tf.device('/gpu:3'):
-			epsilon = 1e-10
-			self.recon_loss0 = tf.reduce_mean(tf.reduce_sum(-self.x0_flatten * tf.log(tf.reshape(self.x0_recon, [-1, 27000]) + epsilon) -
-							 (1.0 - self.x0_flatten) * tf.log(1.0 - tf.reshape(self.x0_recon, [-1, 27000]) + epsilon), 1))
-		with tf.device('/gpu:0'):
-			## http://kvfrans.com/variational-autoencoders-explained/
-			## tf.exp(self.z0_log_sigma_sq):= tf.square(z_stddev) --> self.z0_log_sigma_sq:= log(tf.square(z_stddev))
-			self.latent_loss0 = tf.reduce_mean(tf.reduce_sum(0.5 * (tf.square(self.z0_mean) + tf.exp(self.z0_log_sigma_sq) -
-									self.z0_log_sigma_sq- 1.0), 1))
+		# with tf.device('/gpu:0'):
+		# 	epsilon = 1e-10
+		# 	self.recon_loss0 = tf.reduce_mean(tf.reduce_sum(-self.x0_flatten * tf.log(tf.reshape(self.x0_recon, [-1, 27000]) + epsilon) -
+		# 					 (1.0 - self.x0_flatten) * tf.log(1.0 - tf.reshape(self.x0_recon, [-1, 27000]) + epsilon), 1))
+		# with tf.device('/gpu:0'):
+		# 	## http://kvfrans.com/variational-autoencoders-explained/
+		# 	## tf.exp(self.z0_log_sigma_sq):= tf.square(z_stddev) --> self.z0_log_sigma_sq:= log(tf.square(z_stddev))
+		# 	self.latent_loss0 = tf.reduce_mean(tf.reduce_sum(0.5 * (tf.square(self.z0_mean) + tf.exp(self.z0_log_sigma_sq) -
+		# 							self.z0_log_sigma_sq- 1.0), 1))
 
-			self.cost = FLAGS.reweight_recon * self.recon_loss0 + FLAGS.reweight_vae * self.latent_loss0
-			self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.cost, colocate_gradients_with_ops=True)
-			
-			summary_loss0 = tf.scalar_summary('loss0/loss', self.cost)
-			summary_loss_recon0 = tf.scalar_summary('loss0/rec_loss', self.recon_loss0 / self.x_size)
-			summary_loss_latent0 = tf.scalar_summary('loss0/vae_loss', self.latent_loss0)
-			summaries0 = [summary_loss0, summary_loss_recon0, summary_loss_latent0]
-			self.merged_summaries0 = tf.merge_summary(summaries0)
+		# 	self.cost = FLAGS.reweight_recon * self.recon_loss0 + FLAGS.reweight_gan * self.latent_loss0
+		# 	self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.cost, colocate_gradients_with_ops=True)
+		
+		self.d_loss_real = tf.reduce_mean(
+			tf.nn.sigmoid_cross_entropy_with_logits(
+				logits=self.D_logits, targets=tf.ones_like(self.D)))
+		self.d_loss_fake = tf.reduce_mean(
+			tf.nn.sigmoid_cross_entropy_with_logits(
+				logits=self.D_logits_, targets=tf.zeros_like(self.D_)))
+		self.g_loss = tf.reduce_mean(
+			tf.nn.sigmoid_cross_entropy_with_logits(
+				logits=self.D_logits_, targets=tf.ones_like(self.D_)))
 
-			summary_loss0_test = tf.scalar_summary('loss0_test/loss', self.cost)
-			summary_loss0_recon_test = tf.scalar_summary('loss0_test/rec_loss', self.recon_loss0 / self.x_size)
-			summary_loss0_latent_test = tf.scalar_summary('loss0_test/vae_loss', self.latent_loss0)
-			summaries0_test = [summary_loss0_test, summary_loss0_recon_test, summary_loss0_latent_test]
-			self.merged_summaries0_test = tf.merge_summary(summaries0_test)
+		self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
+		self.d_loss_fake_sum = scalar_summary("d_loss_fake", self.d_loss_fake)
+													
+		self.d_loss = self.d_loss_real + self.d_loss_fake
+
+		self.g_loss_sum = scalar_summary("g_loss", self.g_loss)
+		self.d_loss_sum = scalar_summary("d_loss", self.d_loss)
+
+		t_vars = tf.trainable_variables()
+		print t_vars
+		print slim.get_variables_to_restore(include=["encoder0","decoder0","step"])
+		self.d_vars = [var for var in t_vars if 'd_' in var.name]
+		self.g_vars = [var for var in t_vars if 'g_' in var.name]
+
+		# slim.get_variables_to_restore(include=["encoder0","decoder0","step"])
+
+		d_optim = tf.train.AdamOptimizer(self.learning_rate, beta1=FLAGS.beta1) \
+							.minimize(self.d_loss, var_list=self.d_vars)
+		g_optim = tf.train.AdamOptimizer(self.learning_rate, beta1=FLAGS.beta1) \
+							.minimize(self.g_loss, var_list=self.g_vars)
+
+		# summary_loss0 = tf.scalar_summary('loss0/loss', self.cost)
+		# summary_loss_recon0 = tf.scalar_summary('loss0/rec_loss', self.recon_loss0 / self.x_size)
+		# summary_loss_latent0 = tf.scalar_summary('loss0/gan_loss', self.latent_loss0)
+		# summaries0 = [summary_loss0, summary_loss_recon0, summary_loss_latent0]
+		self.g_sum = merge_summary([self.z_sum, self.d__sum,
+			self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
+		self.d_sum = merge_summary(
+				[self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
+		# self.merged_summaries0 = tf.merge_summary(summaries0)
+
+		# summary_loss0_test = tf.scalar_summary('loss0_test/loss', self.cost)
+		# summary_loss0_recon_test = tf.scalar_summary('loss0_test/rec_loss', self.recon_loss0 / self.x_size)
+		# summary_loss0_latent_test = tf.scalar_summary('loss0_test/gan_loss', self.latent_loss0)
+		# summaries0_test = [summary_loss0_test, summary_loss0_recon_test, summary_loss0_latent_test]
+		# self.merged_summaries0_test = tf.merge_summary(summaries0_test)
 
 	def BatchNorm(self, inputT, trainable, scope=None):
 		if trainable:
 			print '########### BN trainable!!!'
 		return tflearn.layers.normalization.batch_normalization(inputT, trainable=trainable)
 
-	def _x_2_z_conv(self, input_tensor, trainable):
-		input_shape=[None, 27000]
+	def _discriminator(self, input_tensor, trainable, reuse=False):
+		with tf.variable_scope("discriminator") as scope:
+			if reuse:
+				scope.reuse_variables()
 
-		x_tensor = tf.reshape(input_tensor, [-1, 30, 30, 30, 1])
-		current_input = x_tensor
+			with slim.arg_scope([slim.fully_connected], trainable=FLAGS.train_net):
+				input_shape=[None, 27000]
 
-		def conv_layer(current_input, kernel_shape, strides, scope, transfer_fct, is_training, if_batch_norm, padding, trainable):
-			# kernel = tf.truncated_normal(kernel_shape, dtype=tf.float32, stddev=1e-3)
-			kernel = tf.Variable(
-				tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
-				trainable=trainable)
-			biases = tf.Variable(tf.zeros(shape=[kernel_shape[-1]], dtype=tf.float32), trainable=trainable)
-			if if_batch_norm:
-				current_output = transfer_fct(
-					self.BatchNorm(
-						tf.add(tf.nn.conv3d(current_input, kernel, strides, padding), biases),
-						trainable=trainable, scope=scope
+				x_tensor = tf.reshape(input_tensor, [-1, 30, 30, 30, 1])
+				current_input = x_tensor
+
+				def conv_layer(current_input, kernel_shape, strides, scope, transfer_fct, is_training, if_batch_norm, padding, trainable):
+					# kernel = tf.truncated_normal(kernel_shape, dtype=tf.float32, stddev=1e-3)
+					kernel = tf.Variable(
+						tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
+						trainable=trainable)
+					biases = tf.Variable(tf.zeros(shape=[kernel_shape[-1]], dtype=tf.float32), trainable=trainable)
+					if if_batch_norm:
+						current_output = transfer_fct(
+							self.BatchNorm(
+								tf.add(tf.nn.conv3d(current_input, kernel, strides, padding), biases),
+								trainable=trainable, scope=scope
+								)
+							)
+					else:
+						current_output = transfer_fct(
+								tf.nn.bias_add(tf.nn.conv3d(current_input, kernel, strides, padding), biases),
+							)
+					return current_output
+				def transfer_fct_none(x):
+					return x
+
+				current_input = conv_layer(current_input, [3, 3, 3, 1, 32], [1, 1, 1, 1, 1], 'BN-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="VALID", trainable=trainable)
+				print current_input.get_shape().as_list()
+				current_input = conv_layer(current_input, [3, 3, 3, 32, 64], [1, 2, 2, 2, 1], 'BN-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+				print current_input.get_shape().as_list()
+				current_input = conv_layer(current_input, [5, 5, 5, 64, 64], [1, 1, 1, 1, 1], 'BN-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="VALID", trainable=trainable)
+				print current_input.get_shape().as_list()
+				current_input = conv_layer(current_input, [5, 5, 5, 64, 128], [1, 2, 2, 2, 1], 'BN-3', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+				print current_input.get_shape().as_list()
+
+				self.before_flatten_shape = current_input.get_shape().as_list()
+				self.flatten_shape = tf.pack([-1, np.prod(current_input.get_shape().as_list() [1:])])
+				flattened = tf.reshape(current_input, self.flatten_shape)
+				self.flatten_length = flattened.get_shape().as_list()[1]
+
+				print '---------- _discriminator: flatten length:', self.flatten_length
+				hidden_tensor = tf.contrib.layers.fully_connected(flattened, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable)
+				hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable)
+				hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, 1, activation_fn=self.sigmoid, trainable=trainable)
+				return hidden_tensor
+
+	def _generator(self, input_sample, trainable):
+		with tf.variable_scope("generator") as scope:
+			dyn_batch_size = tf.shape(input_sample)[0]
+			hidden_tensor_inv = tf.contrib.layers.fully_connected(input_sample, self.flatten_length//2, activation_fn=None, trainable=trainable)
+			hidden_tensor_inv = tf.contrib.layers.fully_connected(hidden_tensor_inv, self.flatten_length, activation_fn=None, trainable=trainable)
+
+			current_input = tf.reshape(hidden_tensor_inv, [-1, 1, 1, 1, 256])
+			print 'current_input', current_input.get_shape().as_list()
+
+			def deconv_layer(current_input, kernel_shape, strides, output_shape, scope, transfer_fct, is_training, if_batch_norm, padding, trainable):
+				# kernel = tf.truncated_normal(kernel_shape, dtype=tf.float32, stddev=1e-1)
+				kernel = tf.Variable(
+					tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
+					trainable=trainable)
+				biases = tf.Variable(tf.zeros(shape=[kernel_shape[-2]], dtype=tf.float32), trainable=trainable)
+				if if_batch_norm:
+					current_output = transfer_fct(
+						self.BatchNorm(tf.reshape(
+							tf.add(tf.nn.conv3d_transpose(current_input, kernel,
+								output_shape, strides, padding), biases),
+							output_shape),
+							trainable=trainable, scope=scope
+							)
 						)
-					)
-			else:
-				current_output = transfer_fct(
-						tf.nn.bias_add(tf.nn.conv3d(current_input, kernel, strides, padding), biases),
-					)
-			return current_output
-		def transfer_fct_none(x):
-			return x
-
-		current_input = conv_layer(current_input, [3, 3, 3, 1, 32], [1, 1, 1, 1, 1], 'BN-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="VALID", trainable=trainable)
-		print current_input.get_shape().as_list()
-		current_input = conv_layer(current_input, [3, 3, 3, 32, 64], [1, 2, 2, 2, 1], 'BN-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
-		print current_input.get_shape().as_list()
-		current_input = conv_layer(current_input, [5, 5, 5, 64, 64], [1, 1, 1, 1, 1], 'BN-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="VALID", trainable=trainable)
-		print current_input.get_shape().as_list()
-		current_input = conv_layer(current_input, [5, 5, 5, 64, 128], [1, 2, 2, 2, 1], 'BN-3', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
-		print current_input.get_shape().as_list()
-		current_input = conv_layer(current_input, [5, 5, 5, 128, 256], [1, 1, 1, 1, 1], 'BN-4', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="VALID", trainable=trainable)
-		print current_input.get_shape().as_list()
-		# current_input = conv_layer(current_input, [3, 3, 3, 128, 256], [1, 2, 2, 2, 1], 'BN-6', transfer_fct_none, is_training=self.is_training, if_batch_norm=False, padding="SAME")
-		# print current_input.get_shape().as_list()
-
-		self.before_flatten_shape = current_input.get_shape().as_list()
-		self.flatten_shape = tf.pack([-1, np.prod(current_input.get_shape().as_list() [1:])])
-		flattened = tf.reshape(current_input, self.flatten_shape)
-		self.flatten_length = flattened.get_shape().as_list()[1]
-		return flattened
-
-	def _fcAfter_x_2_z_conv(self, flattened, output_size, trainable):
-		print '---------- _x_2_z_conv: flatten length:', self.flatten_length
-		hidden_tensor = tf.contrib.layers.fully_connected(flattened, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable)
-		hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable)
-		hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, output_size, activation_fn=self.transfer_fct_conv, trainable=trainable)
-		return hidden_tensor
-
-	def _z_2_x_conv(self, input_sample, trainable):
-		# self.flatten_length = 256
-		dyn_batch_size = tf.shape(input_sample)[0]
-		# hidden_tensor_inv = tf.contrib.layers.fully_connected(input_sample, self.flatten_length//4, activation_fn=None)
-		hidden_tensor_inv = tf.contrib.layers.fully_connected(input_sample, self.flatten_length//2, activation_fn=None, trainable=trainable)
-		hidden_tensor_inv = tf.contrib.layers.fully_connected(hidden_tensor_inv, self.flatten_length, activation_fn=None, trainable=trainable)
-
-		# W_fc = tf.Variable(xavier_init(input_sample.get_shape().as_list()[1], self.flatten_length))
-		# b_fc = tf.Variable(tf.zeros([self.flatten_length], dtype=tf.float32)),
-		# hidden_tensor_inv = tf.matmul(input_sample, W_fc) + b_fc
-
-		current_input = tf.reshape(hidden_tensor_inv, [-1, 1, 1, 1, 256])
-		print 'current_input', current_input.get_shape().as_list()
-
-		def deconv_layer(current_input, kernel_shape, strides, output_shape, scope, transfer_fct, is_training, if_batch_norm, padding, trainable):
-			# kernel = tf.truncated_normal(kernel_shape, dtype=tf.float32, stddev=1e-1)
-			kernel = tf.Variable(
-				tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
-				trainable=trainable)
-			biases = tf.Variable(tf.zeros(shape=[kernel_shape[-2]], dtype=tf.float32), trainable=trainable)
-			if if_batch_norm:
-				current_output = transfer_fct(
-					self.BatchNorm(tf.reshape(
-						tf.add(tf.nn.conv3d_transpose(current_input, kernel,
-							output_shape, strides, padding), biases),
-						output_shape),
-						trainable=trainable, scope=scope
+				else:
+					current_output = transfer_fct(
+						tf.reshape(
+							tf.nn.bias_add(tf.nn.conv3d_transpose(current_input, kernel,
+								output_shape, strides, padding), biases),
+							output_shape)
 						)
-					)
-			else:
-				current_output = transfer_fct(
-					tf.reshape(
-						tf.nn.bias_add(tf.nn.conv3d_transpose(current_input, kernel,
-							output_shape, strides, padding), biases),
-						output_shape)
-					)
-			return current_output
-		def transfer_fct_none(x):
-			return x
-		current_input = deconv_layer(current_input, [5, 5, 5, 128, 256], [1, 1, 1, 1, 1], tf.pack([dyn_batch_size, 5, 5, 5, 128]), 'BN-deconv-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="VALID", trainable=trainable)
-		print current_input.get_shape().as_list()
-		current_input = deconv_layer(current_input, [5, 5, 5, 64, 128], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 10, 10, 10, 64]), 'BN-deconv-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding ="SAME", trainable=trainable)
-		print current_input.get_shape().as_list()
-		current_input = deconv_layer(current_input, [5, 5, 5, 64, 64], [1, 1, 1, 1, 1], tf.pack([dyn_batch_size, 14, 14, 14, 64]), 'BN-deconv-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="VALID", trainable=trainable)
-		print current_input.get_shape().as_list()
-		current_input = deconv_layer(current_input, [3, 3, 3, 32, 64], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 28, 28, 28, 32]), 'BN-deconv-3', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
-		print current_input.get_shape().as_list()
-		current_input = deconv_layer(current_input, [3, 3, 3, 1, 32], [1, 1, 1, 1, 1], tf.pack([dyn_batch_size, 30, 30, 30, 1]), 'BN-deconv-4', tf.sigmoid, is_training=self.is_training, if_batch_norm=FLAGS.if_BN_out, padding="VALID", trainable=trainable)
-		print current_input.get_shape().as_list()
-		return current_input
+				return current_output
+			def transfer_fct_none(x):
+				return x
+			current_input = deconv_layer(current_input, [5, 5, 5, 64, 128], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 10, 10, 10, 64]), 'BN-deconv-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding ="SAME", trainable=trainable)
+			print current_input.get_shape().as_list()
+			current_input = deconv_layer(current_input, [5, 5, 5, 64, 64], [1, 1, 1, 1, 1], tf.pack([dyn_batch_size, 14, 14, 14, 64]), 'BN-deconv-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="VALID", trainable=trainable)
+			print current_input.get_shape().as_list()
+			current_input = deconv_layer(current_input, [3, 3, 3, 32, 64], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 28, 28, 28, 32]), 'BN-deconv-3', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+			print current_input.get_shape().as_list()
+			current_input = deconv_layer(current_input, [3, 3, 3, 1, 32], [1, 1, 1, 1, 1], tf.pack([dyn_batch_size, 30, 30, 30, 1]), 'BN-deconv-4', tf.sigmoid, is_training=self.is_training, if_batch_norm=FLAGS.if_BN_out, padding="VALID", trainable=trainable)
+			print current_input.get_shape().as_list()
+			return current_input
 
+	# def _train_align0(self, is_training):
+	# 	_, cost, cost_recon, cost_gan, merged, \
+	# 	x0_reduce, x, x_recon, x_idx, z_mean, z_log_sigma_sq, z, steps, is_training = self.sess.run(
+	# 		(self.optimizer, self.cost, self.recon_loss0, self.latent_loss0, self.merged_summaries0, \
+	# 			self.x0_reduce, self.x0, self.x0_recon, self.gen.x0_batch_idx, self.z0_mean, self.z0_log_sigma_sq, self.z0, self.global_step, self.is_training), \
+	# 		feed_dict={self.is_training: True, self.gen.is_training: True, self.is_queue: True, self.train_net: True})
+	# 	print x0_reduce[:1]
+	# 	print z_mean[:2], np.amax(z_mean), np.amin(z_mean)
+	# 	std_diev = np.sqrt(np.exp(z_log_sigma_sq[:2]))
+	# 	print std_diev, np.amax(std_diev), np.amin(std_diev)
+	# 	return (cost, cost_recon, cost_gan, merged, x, x_recon, x_idx, z_mean, z_log_sigma_sq, z, steps)
 
-	def _train_align0(self, is_training):
-		_, cost, cost_recon, cost_vae, merged, \
-		x0_reduce, x, x_recon, x_idx, z_mean, z_log_sigma_sq, z, steps, is_training = self.sess.run(
-			(self.optimizer, self.cost, self.recon_loss0, self.latent_loss0, self.merged_summaries0, \
-				self.x0_reduce, self.x0, self.x0_recon, self.gen.x0_batch_idx, self.z0_mean, self.z0_log_sigma_sq, self.z0, self.global_step, self.is_training), \
-			feed_dict={self.is_training: True, self.gen.is_training: True, self.is_queue: True, self.train_net: True})
-		print x0_reduce[:1]
-		print z_mean[:2], np.amax(z_mean), np.amin(z_mean)
-		std_diev = np.sqrt(np.exp(z_log_sigma_sq[:2]))
-		print std_diev, np.amax(std_diev), np.amin(std_diev)
-		return (cost, cost_recon, cost_vae, merged, x, x_recon, x_idx, z_mean, z_log_sigma_sq, z, steps)
-
-	def _test_align0(self, is_training):
-		cost, cost_recon, cost_vae, merged, x, x_recon, x_idx, z_mean, z_log_sigma_sq, z, steps, is_training = self.sess.run(
-			(self.cost, self.recon_loss0, self.latent_loss0, self.merged_summaries0_test, \
-				self.x0, self.x0_recon, self.gen.x0_batch_idx, self.z0_mean, self.z0_log_sigma_sq, self.z0, self.global_step, self.is_training), \
-			feed_dict={self.is_training: False, self.gen.is_training: False, self.is_queue: True, self.train_net: True})
-		return (cost, cost_recon, cost_vae, merged, x, x_recon, x_idx, z_mean, z_log_sigma_sq, z, steps)
+	# def _test_align0(self, is_training):
+	# 	cost, cost_recon, cost_gan, merged, x, x_recon, x_idx, z_mean, z_log_sigma_sq, z, steps, is_training = self.sess.run(
+	# 		(self.cost, self.recon_loss0, self.latent_loss0, self.merged_summaries0_test, \
+	# 			self.x0, self.x0_recon, self.gen.x0_batch_idx, self.z0_mean, self.z0_log_sigma_sq, self.z0, self.global_step, self.is_training), \
+	# 		feed_dict={self.is_training: False, self.gen.is_training: False, self.is_queue: True, self.train_net: True})
+	# 	return (cost, cost_recon, cost_gan, merged, x, x_recon, x_idx, z_mean, z_log_sigma_sq, z, steps)
 
 def draw_sample(fig, data, ms, colormap='rainbow', camera_view=False, p=None):
 	# data = np.reshape(data, (30, 30, 30))
@@ -349,7 +389,7 @@ def draw_sample(fig, data, ms, colormap='rainbow', camera_view=False, p=None):
 	im = imayavi_return_inline(fig=fig)
 	return im
 
-def prepare_for_training(vae):
+def prepare_for_training(gan):
 	np.set_printoptions(suppress=True)
 	np.set_printoptions(precision=2)
 	np.set_printoptions(threshold=np.inf) # whether output entire matrix without clipping
@@ -462,111 +502,124 @@ def prepare_for_training(vae):
 		global pltfig_z0
 		pltfig_z0 = plt.figure(3, figsize=(20, 8))
 		plt.show(block=False)
-		# if FLAGS.train_net == False:
-		# 	global pltfig_p0
-		# 	pltfig_p0 = plt.figure(4, figsize=(20, 8))
-		# 	plt.show(block=False)
 	global tsne_model
 	tsne_model = TSNE(n_components=2, random_state=0, init='pca')
-	# global gen_per_model
-	# gen_per_model = FLAGS.batch_size // FLAGS.models_in_batch
 	print '+++++ prepare_for_training finished.'
 
-def train(vae):
-	prepare_for_training(vae)
+def train(gan):
+	prepare_for_training(gan)
+	sample_z = np.random.uniform(-1, 1, size=(gan.batch_size, gan.z_size))
 	try:
-		while not vae.coord.should_stop():
+		while not gan.coord.should_stop():
 			start_time = time.time()
 
-			if FLAGS.train_net:
-				cost, cost_recon, cost_vae, merged, x, x_recon, x_idx, z0_mean, z0_log_sigma_sq, z0, step = vae._train_align0(is_training=True)
-				epoch_show = math.floor(float(step) * FLAGS.models_in_batch / float(num_samples))
-				batch_show = math.floor(step - epoch_show * (num_samples / FLAGS.models_in_batch))
-			if FLAGS.if_disp and step % FLAGS.disp_every_step == 0 and step != 0:
-				print '----- Drawing latent space of s from training batch... size of z0_mean', z0_mean.shape
-				plt.figure(3)
-				plt.clf()
-				ax_z0 = plt.subplot(121)
-				if vae.z_size != 1:
-					if vae.z_size != 2:
-						# z0_mean = bh_sne(np.round(np.float64(z0_mean), 2))
-						z0_mean = tsne_model.fit_transform(np.round(z0_mean, 2))
-				C = x_idx
-				plt.scatter(z0_mean[:, 0], z0_mean[:, 1], c=C, lw=0)
-				for i, txt in enumerate(C):
-					ax_z0.text(z0_mean[i, 0], z0_mean[i, 1], str(C[i][0]), fontsize=7, bbox={'facecolor':'white', 'alpha':0.7, 'pad':0.0, 'lw':0})
-				ax_z0.set_title('z0 space (aligned models)', fontsize=14, fontweight='bold')
+			batch_z = np.random.uniform(-1, 1, [gan.batch_size, gan.z_size]) \
+							.astype(np.float32)
+
+			# Update D network
+			_, summary_str = gan.sess.run([gan.d_optim, gan.d_sum],
+				feed_dict={gan.z: batch_z})
+			gan.train_writer.add_summary(summary_str, step)
+
+			# Update G network
+			_, summary_str = gan.sess.run([gan.g_optim, gan.g_sum],
+				feed_dict={gan.z: batch_z})
+			gan.train_writer.add_summary(summary_str, step)
+
+			# Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
+			_, summary_str = gan.sess.run([gan.g_optim, gan.g_sum],
+				feed_dict={gan.z: batch_z})
+			gan.train_writer.add_summary(summary_str, step)
+
+			errD_fake = gan.d_loss_fake.eval({gan.z: batch_z})
+			errD_real = gan.d_loss_real.eval({})
+			errG = gan.g_loss.eval({gan.z: batch_z})
+
+			epoch_show = math.floor(float(step) * FLAGS.models_in_batch / float(num_samples))
+			batch_show = math.floor(step - epoch_show * (num_samples / FLAGS.models_in_batch))
+			# if FLAGS.if_disp and step % FLAGS.disp_every_step == 0 and step != 0:
+			# 	print '----- Drawing latent space of s from training batch... size of z0_mean', z0_mean.shape
+			# 	plt.figure(3)
+			# 	plt.clf()
+			# 	ax_z0 = plt.subplot(121)
+			# 	if gan.z_size != 1:
+			# 		if gan.z_size != 2:
+			# 			# z0_mean = bh_sne(np.round(np.float64(z0_mean), 2))
+			# 			z0_mean = tsne_model.fit_transform(np.round(z0_mean, 2))
+			# 	C = x_idx
+			# 	plt.scatter(z0_mean[:, 0], z0_mean[:, 1], c=C, lw=0)
+			# 	for i, txt in enumerate(C):
+			# 		ax_z0.text(z0_mean[i, 0], z0_mean[i, 1], str(C[i][0]), fontsize=7, bbox={'facecolor':'white', 'alpha':0.7, 'pad':0.0, 'lw':0})
+			# 	ax_z0.set_title('z0 space (aligned models)', fontsize=14, fontweight='bold')
 
 			if FLAGS.if_summary:
-				vae.train_writer.add_summary(merged, step)
-				vae.train_writer.flush()
+				gan.train_writer.add_summary(merged, step)
+				gan.train_writer.flush()
 				if FLAGS.train_net:
 					print "STEP", '%03d' % (step), "Epo", '%03d' % (epoch_show), "ba", '%03d' % (batch_show), \
-					"cost =", "%.4f = %.4f + %.4f" % (\
-						cost, cost_recon * FLAGS.reweight_recon, cost_vae * FLAGS.reweight_vae), \
-					"-- recon = %.4f, vae = %.4f" % (cost_recon / vae.x_size, cost_vae)
+					"d_loss: %.8f, g_loss: %.8f" % (d_loss: %.8f, g_loss: %.8f)
 
 			if FLAGS.if_save and step != 0 and step % FLAGS.save_every_step == 0:
-				save_vae(vae, step, epoch_show, batch_show)
+				save_gan(gan, step, epoch_show, batch_show)
 
-			if FLAGS.if_test and step % FLAGS.test_every_step == 0 and step != 0:
-				if FLAGS.train_net:
-					cost, cost_recon, cost_vae, merged, x, x_recon, x_idx, z_mean, z_log_sigma_sq, z, step = vae._test_align0(is_training=False)
-				if FLAGS.if_summary:
-					vae.train_writer.add_summary(merged, step)
-					vae.train_writer.flush()
-					if FLAGS.train_net:
-						print "TESTING net 0... "\
-						"cost =", "%.4f = %.4f + %.4f" % (\
-							cost, cost_recon * FLAGS.reweight_recon, cost_vae * FLAGS.reweight_vae), \
-						"-- recon = %.4f, vae = %.4f" % (cost_recon / vae.x_size, cost_vae)
-				if FLAGS.if_draw and step % FLAGS.draw_every == 0:
-					print 'Drawing reconstructed sample from testing batch...'
-					plt.figure(1)
-					for test_idx in range(15):
-						im = draw_sample(figM, x[test_idx].reshape((30, 30, 30)), ms)
-						plt.subplot(3, 5, test_idx+1)
-						plt.imshow(im)
-						plt.axis('off')
-					pltfig_3d.suptitle('Target models at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
-					pltfig_3d.canvas.draw()
-					pltfig_3d.savefig(params['summary_folder']+'/%d-pltfig_3d_gnd.png'%step)
-					plt.figure(2)
-					for test_idx in range(15):
-						im = draw_sample(figM, x_recon[test_idx].reshape((30, 30, 30)), ms)
-						plt.subplot(3, 5, test_idx+1)
-						plt.imshow(im)
-						plt.axis('off')
-					pltfig_3d_recon.suptitle('Reconstructed models at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
-					pltfig_3d_recon.canvas.draw()
-					pltfig_3d_recon.savefig(params['summary_folder']+'/%d-pltfig_3d_recon.png'%step)
-					if FLAGS.train_net == False:
-						plt.figure(5)
-						for test_idx in range(15):
-							plt.subplot(3, 5, test_idx+1)
-							plt.imshow(((x2d_rgb[test_idx] + 0.5) * 255.).astype(np.uint8))
-							plt.axis('off')
-						pltfig_2d.suptitle('Target RGB image at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
-						pltfig_2d.canvas.draw()
-						pltfig_2d.savefig(params['summary_folder']+'/%d-pltfig_rgb.png'%step)
-						plt.figure(6)
-						for test_idx in range(15):
-							im = draw_sample(figM_2d, x_proj[test_idx].reshape((30, 30, 1)), ms_2d, camera_view=True)
-							plt.subplot(3, 5, test_idx+1)
-							plt.imshow(im)
-							plt.axis('off')
-						pltfig_2d_reproj.suptitle('Reprojection at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
-						pltfig_2d_reproj.canvas.draw()
-						pltfig_2d_reproj.savefig(params['summary_folder']+'/%d-pltfig_2d_proj.png'%step)
-						plt.figure(7)
-						for test_idx in range(15):
-							im = draw_sample(figM_2d, x2d_gnd[test_idx].reshape((30, 30, 1)), ms_2d, camera_view=True)
-							plt.subplot(3, 5, test_idx+1)
-							plt.imshow(im)
-							plt.axis('off')
-						pltfig_2d_reproj_gnd.suptitle('Gnd truth projection at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
-						pltfig_2d_reproj_gnd.canvas.draw()
-						pltfig_2d_reproj_gnd.savefig(params['summary_folder']+'/%d-pltfig_2d_gnd.png'%step)
+			# if FLAGS.if_test and step % FLAGS.test_every_step == 0 and step != 0:
+			# 	if FLAGS.train_net:
+			# 		cost, cost_recon, cost_gan, merged, x, x_recon, x_idx, z_mean, z_log_sigma_sq, z, step = gan._test_align0(is_training=False)
+			# 	if FLAGS.if_summary:
+			# 		gan.train_writer.add_summary(merged, step)
+			# 		gan.train_writer.flush()
+			# 		if FLAGS.train_net:
+			# 			print "TESTING net 0... "\
+			# 			"cost =", "%.4f = %.4f + %.4f" % (\
+			# 				cost, cost_recon * FLAGS.reweight_recon, cost_gan * FLAGS.reweight_gan), \
+			# 			"-- recon = %.4f, gan = %.4f" % (cost_recon / gan.x_size, cost_gan)
+			# 	if FLAGS.if_draw and step % FLAGS.draw_every == 0:
+			# 		print 'Drawing reconstructed sample from testing batch...'
+			# 		plt.figure(1)
+			# 		for test_idx in range(15):
+			# 			im = draw_sample(figM, x[test_idx].reshape((30, 30, 30)), ms)
+			# 			plt.subplot(3, 5, test_idx+1)
+			# 			plt.imshow(im)
+			# 			plt.axis('off')
+			# 		pltfig_3d.suptitle('Target models at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
+			# 		pltfig_3d.canvas.draw()
+			# 		pltfig_3d.savefig(params['summary_folder']+'/%d-pltfig_3d_gnd.png'%step)
+			# 		plt.figure(2)
+			# 		for test_idx in range(15):
+			# 			im = draw_sample(figM, x_recon[test_idx].reshape((30, 30, 30)), ms)
+			# 			plt.subplot(3, 5, test_idx+1)
+			# 			plt.imshow(im)
+			# 			plt.axis('off')
+			# 		pltfig_3d_recon.suptitle('Reconstructed models at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
+			# 		pltfig_3d_recon.canvas.draw()
+			# 		pltfig_3d_recon.savefig(params['summary_folder']+'/%d-pltfig_3d_recon.png'%step)
+			# 		if FLAGS.train_net == False:
+			# 			plt.figure(5)
+			# 			for test_idx in range(15):
+			# 				plt.subplot(3, 5, test_idx+1)
+			# 				plt.imshow(((x2d_rgb[test_idx] + 0.5) * 255.).astype(np.uint8))
+			# 				plt.axis('off')
+			# 			pltfig_2d.suptitle('Target RGB image at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
+			# 			pltfig_2d.canvas.draw()
+			# 			pltfig_2d.savefig(params['summary_folder']+'/%d-pltfig_rgb.png'%step)
+			# 			plt.figure(6)
+			# 			for test_idx in range(15):
+			# 				im = draw_sample(figM_2d, x_proj[test_idx].reshape((30, 30, 1)), ms_2d, camera_view=True)
+			# 				plt.subplot(3, 5, test_idx+1)
+			# 				plt.imshow(im)
+			# 				plt.axis('off')
+			# 			pltfig_2d_reproj.suptitle('Reprojection at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
+			# 			pltfig_2d_reproj.canvas.draw()
+			# 			pltfig_2d_reproj.savefig(params['summary_folder']+'/%d-pltfig_2d_proj.png'%step)
+			# 			plt.figure(7)
+			# 			for test_idx in range(15):
+			# 				im = draw_sample(figM_2d, x2d_gnd[test_idx].reshape((30, 30, 1)), ms_2d, camera_view=True)
+			# 				plt.subplot(3, 5, test_idx+1)
+			# 				plt.imshow(im)
+			# 				plt.axis('off')
+			# 			pltfig_2d_reproj_gnd.suptitle('Gnd truth projection at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
+			# 			pltfig_2d_reproj_gnd.canvas.draw()
+			# 			pltfig_2d_reproj_gnd.savefig(params['summary_folder']+'/%d-pltfig_2d_gnd.png'%step)
 			end_time = time.time()
 			elapsed = end_time - start_time
 			print "--- Time %f seconds."%elapsed
@@ -574,28 +627,28 @@ def train(vae):
 		print('Done training.')
 	finally:
 		# When done, ask the threads to stop.
-		vae.coord.request_stop()
+		gan.coord.request_stop()
 	# Wait for threads to finish.
-	vae.coord.join(vae.threads)
-	vae.sess.close()
+	gan.coord.join(gan.threads)
+	gan.sess.close()
 
-def save_vae(vae, step, epoch, batch):
+def save_gan(gan, step, epoch, batch):
 	if FLAGS.train_net:
-		net_folder = vae.params['model_folder'] + '/net0'
+		net_folder = gan.params['model_folder'] + '/net0'
 	# else:
-	# 	net_folder = vae.params['model_folder'] + '/net1'
-	save_path = vae.saver_for_resume.save(vae.sess, \
+	# 	net_folder = gan.params['model_folder'] + '/net1'
+	save_path = gan.saver_for_resume.save(gan.sess, \
 		net_folder + '/%s-step%d-epoch%d-batch%d.ckpt' % (params['save_name'], step, epoch, batch), \
 		global_step=step)
 	print("-----> Model saved to file: %s; step = %d" % (save_path, step))
 
-def restore_vae(vae, params):
-	# if FLAGS.train_netvae.saver_for_restore_encoder0.restore(vae.sess, latest_checkpoint)
+def restore_gan(gan, params):
+	# if FLAGS.train_netgan.saver_for_restore_encoder0.restore(gan.sess, latest_checkpoint)
 	if FLAGS.train_net:
-		net_folder = vae.params['model_folder_restore'] + '/net0'
+		net_folder = gan.params['model_folder_restore'] + '/net0'
 	else:
-		net_folder = vae.params['model_folder_restore'] + '/net1'
-	net0_folder = vae.params['model_folder_net0_restore'] + '/net0'
+		net_folder = gan.params['model_folder_restore'] + '/net1'
+	net0_folder = gan.params['model_folder_net0_restore'] + '/net0'
 
 	if FLAGS.restore_encoder0:
 		if "ckpt" not in net0_folder:
@@ -603,15 +656,15 @@ def restore_vae(vae, params):
 		else:
 			latest_checkpoint = FLAGS.folder_name_net0_restore_from
 		print "+++++ Loading net0 from: %s" % (latest_checkpoint)
-		vae.restorer_encoder0.restore(vae.sess, latest_checkpoint)
+		gan.restorer_encoder0.restore(gan.sess, latest_checkpoint)
 	else:
 		if FLAGS.resume_from == 1:
-			if "ckpt" not in vae.params['model_folder_restore']:
-				latest_checkpoint = tf.train.latest_checkpoint(vae.params['model_folder_restore'] + '/')
+			if "ckpt" not in gan.params['model_folder_restore']:
+				latest_checkpoint = tf.train.latest_checkpoint(gan.params['model_folder_restore'] + '/')
 			else:
 				latest_checkpoint = FLAGS.folder_name_restore_from
-			print "+++++ Resuming: Model restored from folder: %s file: %s" % (vae.params['model_folder_restore'], latest_checkpoint)
-			vae.restorer.restore(vae.sess, latest_checkpoint)
+			print "+++++ Resuming: Model restored from folder: %s file: %s" % (gan.params['model_folder_restore'], latest_checkpoint)
+			gan.restorer.restore(gan.sess, latest_checkpoint)
 # ## Illustrating reconstruction quality
 
 params = dict(n_input=27000,
@@ -632,13 +685,13 @@ if FLAGS.resume_from == -1 and FLAGS.if_show == False:
 global alexnet_data
 alexnet_data = np.load("./alexnet/bvlc_alexnet.npy").item()
 print '===== Alexnet loaded.'
-vae = VariationalAutoencoder(params)
+gan = VariationalAutoencoder(params)
 
 global net_folder
 if FLAGS.train_net:
-	net_folder = vae.params['model_folder'] + '/net0'
+	net_folder = gan.params['model_folder'] + '/net0'
 # else:
-# 	net_folder = vae.params['model_folder'] + '/net1'
+# 	net_folder = gan.params['model_folder'] + '/net1'
 if FLAGS.resume_from == 1 and FLAGS.folder_name_restore_from == "":
 	print "+++++ Setting restore folder name to the saving folder name..."
 	params["model_folder_restore"] = net_folder
@@ -646,16 +699,16 @@ print '===== FLAGS.restore_encoder0:', FLAGS.restore_encoder0
 print '===== FLAGS.folder_name_restore_from:', FLAGS.folder_name_restore_from
 print '===== FLAGS.folder_name_net0_restore_from:', FLAGS.folder_name_net0_restore_from
 if FLAGS.resume_from != -1 or FLAGS.restore_encoder0 == True:
-	restore_vae(vae, params)
+	restore_gan(gan, params)
 
 if FLAGS.if_show == False:
 	print("-----> Starting Training")
 	print 'if_unlock_decoder0', FLAGS.if_unlock_decoder0
 	print [var.op.name for var in tf.trainable_variables()]
-	train(vae)
+	train(gan)
 else:
 	print("-----> Starting Showing")
 	if FLAGS.train_net:
-		show_0(vae)
+		show_0(gan)
 	# else:
-	# 	show_1(vae)	
+	# 	show_1(gan)	
