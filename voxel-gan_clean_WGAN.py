@@ -242,7 +242,7 @@ class VariationalAutoencoder(object):
 						current_output = transfer_fct(
 							self.BatchNorm(
 								tf.add(tf.nn.conv3d(current_input, kernel, strides, padding), biases),
-								trainable=trainable, scope=scope, reuse=True
+								trainable=trainable, scope=scope, reuse=None
 								)
 							)
 					else:
