@@ -8,6 +8,7 @@ from sklearn.manifold import TSNE
 from tsne import bh_sne
 import tensorflow.contrib.slim as slim
 import tensorflow.contrib.layers as ly
+import tensorpack
 from tensorflow.contrib.layers import batch_norm
 import scipy
 import scipy.io as sio
@@ -220,7 +221,8 @@ class VariationalAutoencoder(object):
 	def BatchNorm(self, inputT, trainable=True, scope=None, reuse=None):
 		if trainable:
 			print '########### BN trainable!!!'
-		return tflearn.layers.normalization.batch_normalization(inputT, trainable=trainable, scope=scope, reuse=False)
+		# return tflearn.layers.normalization.batch_normalization(inputT, trainable=trainable, scope=scope, reuse=False)
+		return tensorpack.models.BatchNorm(inputT)
 
 	def _discriminator(self, input_tensor, trainable=True, reuse=False):
 		with tf.variable_scope("discriminator") as scope:
