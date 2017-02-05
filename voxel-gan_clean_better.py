@@ -36,7 +36,7 @@ flags.DEFINE_boolean("train_net", True, "train net: True for training net 0, fal
 flags.DEFINE_boolean("restore_encoder0", False, "training net 1 and restoring net 0 from saved points")
 flags.DEFINE_integer("n_z", 100, "hidden size")
 flags.DEFINE_integer("batch_size", 200, "batch_size")
-# flags.DEFINE_integer("models_in_batch", 40, "models in a batch")
+flags.DEFINE_integer("models_in_batch", 40, "models in a batch")
 flags.DEFINE_float("learning_rate", 0.001, "learning rate")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
 # flags.DEFINE_float("reweight_recon", 1.0, "weight for recon loss")
@@ -183,7 +183,7 @@ class VirtualBatchNormalization(object):
 			shape = x.get_shape().as_list()
 
 		with tf.variable_scope(self.name, reuse=True) as scope:
-			new_coeff = 1. / (FLAGS.batch_size + 1.)
+			new_coeff = 1. / (FLAGS.batch_size + 1)
 			old_coeff = 1. - new_coeff
 			new_mean = tf.reduce_mean(x, [0, 1, 2], keep_dims=True)
 			new_mean_sq = tf.reduce_mean(tf.square(x), [0, 1, 2], keep_dims=True)
