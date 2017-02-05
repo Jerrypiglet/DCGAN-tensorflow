@@ -237,27 +237,24 @@ class VariationalAutoencoder(object):
 			current_input = x_tensor
 
 			def conv_layer(current_input, kernel_shape, strides, scope, transfer_fct, is_training, if_batch_norm, padding, trainable, reuse=False):
-				with tf.variable_scope("d_weights") as scope_weights:
-					if reuse:
-						scope_weights.reuse_variables()
-					# kernel = tf.truncated_normal(kernel_shape, dtype=tf.float32, stddev=1e-3)
-					# kernel = tf.Variable(
-					# 	tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
-					# 	trainable=trainable)
-					kernel = tf.Variable(tf.random_normal(kernel_shape, stddev=0.02), trainable=trainable, name=scope+'kernel')
-					biases = tf.Variable(tf.zeros(shape=[kernel_shape[-1]], dtype=tf.float32), trainable=trainable, name=scope+'bias')
-					if if_batch_norm:
-						current_output = transfer_fct(
-							self.BatchNorm(
-								tf.add(tf.nn.conv3d(current_input, kernel, strides, padding), biases),
-								trainable=trainable, scope=scope, reuse=None
-								)
+				# kernel = tf.truncated_normal(kernel_shape, dtype=tf.float32, stddev=1e-3)
+				# kernel = tf.Variable(
+				# 	tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
+				# 	trainable=trainable)
+				kernel = tf.Variable(tf.random_normal(kernel_shape, stddev=0.02), trainable=trainable, name=scope+'kernel')
+				biases = tf.Variable(tf.zeros(shape=[kernel_shape[-1]], dtype=tf.float32), trainable=trainable, name=scope+'bias')
+				if if_batch_norm:
+					current_output = transfer_fct(
+						self.BatchNorm(
+							tf.add(tf.nn.conv3d(current_input, kernel, strides, padding), biases),
+							trainable=trainable, scope=scope, reuse=None
 							)
-					else:
-						current_output = transfer_fct(
-								tf.nn.bias_add(tf.nn.conv3d(current_input, kernel, strides, padding), biases),
-							)
-					return current_output
+						)
+				else:
+					current_output = transfer_fct(
+							tf.nn.bias_add(tf.nn.conv3d(current_input, kernel, strides, padding), biases),
+						)
+				return current_output
 			def transfer_fct_none(x):
 				return x
 
@@ -278,9 +275,9 @@ class VariationalAutoencoder(object):
 			self.flatten_length = flattened.get_shape().as_list()[1]
 
 			print '---------- _>>> discriminator: flatten length:', self.flatten_length
-			hidden_tensor = tf.contrib.layers.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm)
-			hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm)
-			hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, 1, activation_fn=None, trainable=trainable)
+			hidden_tensor = tf.contrib.layers.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm, name='d_fc1')
+			hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm, name='d_fc2')
+			hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, 1, activation_fn=None, trainable=trainable, name='d_fc3')
 			return hidden_tensor
 
 	def _generator(self, input_sample, trainable=True):
