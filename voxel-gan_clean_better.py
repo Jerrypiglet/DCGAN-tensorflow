@@ -444,9 +444,9 @@ class VariationalAutoencoder(object):
 	def _generator(self, input_sample, trainable=True):
 		with tf.variable_scope("generator") as scope:
 			dyn_batch_size = tf.shape(input_sample)[0]
-			hidden_tensor_inv = vbn(tf.contrib.layers.fully_connected(input_sample, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable))
+			hidden_tensor_inv = vbn(tf.contrib.layers.fully_connected(input_sample, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable), "generator-fc-1")
 			# hidden_tensor_inv = tf.contrib.layers.fully_connected(hidden_tensor_inv, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable)
-			hidden_tensor_inv = vbn(tf.contrib.layers.fully_connected(hidden_tensor_inv, self.flatten_length, activation_fn=self.transfer_fct_conv, trainable=trainable))
+			hidden_tensor_inv = vbn(tf.contrib.layers.fully_connected(hidden_tensor_inv, self.flatten_length, activation_fn=self.transfer_fct_conv, trainable=trainable), "generator-fc-2")
 
 			current_input = tf.reshape(hidden_tensor_inv, [-1, 2, 2, 2, 512])
 			print 'current_input', current_input.get_shape().as_list()
