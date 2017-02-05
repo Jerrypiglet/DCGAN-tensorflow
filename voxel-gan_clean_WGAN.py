@@ -224,8 +224,8 @@ class VariationalAutoencoder(object):
 	def BatchNorm(self, inputT, trainable=True, scope=None, reuse=None):
 		if trainable:
 			print '########### BN trainable!!!'
-		return tflearn.layers.normalization.batch_normalization(inputT, trainable=trainable, scope=scope, reuse=False)
-		# return tensorpack.models.BatchNorm(inputT)
+		# return tflearn.layers.normalization.batch_normalization(inputT, trainable=trainable, scope=scope, reuse=False)
+		return tensorpack.models.BatchNorm(inputT)
 
 	def _discriminator(self, input_tensor, trainable=True, reuse=False):
 		with tf.variable_scope("discriminator") as scope:
@@ -275,17 +275,17 @@ class VariationalAutoencoder(object):
 			self.flatten_length = flattened.get_shape().as_list()[1]
 
 			print '---------- _>>> discriminator: flatten length:', self.flatten_length
-			hidden_tensor = tf.contrib.layers.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm, scope='d_fc1')
-			hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm, scope='d_fc2')
-			hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, 1, activation_fn=None, trainable=trainable, scope='d_fc3')
+			hidden_tensor = ly.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm, scope='d_fc1')
+			hidden_tensor = ly.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm, scope='d_fc2')
+			hidden_tensor = ly.fully_connected(hidden_tensor, 1, activation_fn=None, trainable=trainable, scope='d_fc3')
 			return hidden_tensor
 
 	def _generator(self, input_sample, trainable=True):
 		with tf.variable_scope("generator") as scope:
 			dyn_batch_size = tf.shape(input_sample)[0]
-			hidden_tensor_inv = tf.contrib.layers.fully_connected(input_sample, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm)
-			hidden_tensor_inv = tf.contrib.layers.fully_connected(hidden_tensor_inv, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm)
-			hidden_tensor_inv = tf.contrib.layers.fully_connected(hidden_tensor_inv, self.flatten_length, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm)
+			hidden_tensor_inv = ly.fully_connected(input_sample, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm, scope='g_fc1')
+			hidden_tensor_inv = ly.fully_connected(hidden_tensor_inv, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm, scope='g_fc2')
+			hidden_tensor_inv = ly.fully_connected(hidden_tensor_inv, self.flatten_length, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm, scope='g_fc3')
 
 			current_input = tf.reshape(hidden_tensor_inv, [-1, 2, 2, 2, 256])
 			print 'current_input', current_input.get_shape().as_list()
