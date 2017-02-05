@@ -373,9 +373,9 @@ class VariationalAutoencoder(object):
 
 		# slim.get_variables_to_restore(include=["encoder0","decoder0","step"])
 
-		self.d_optim = tf.train.AdamOptimizer(1e-5, beta1=FLAGS.beta1) \
+		self.d_optim = tf.train.AdamOptimizer(1e-6, beta1=FLAGS.beta1) \
 							.minimize(self.d_loss, var_list=self.d_vars)
-		self.g_optim = tf.train.AdamOptimizer(1e-4, beta1=FLAGS.beta1) \
+		self.g_optim = tf.train.AdamOptimizer(1e-3, beta1=FLAGS.beta1) \
 							.minimize(self.g_loss, var_list=self.g_vars)
 
 		self.g_sum = tf.merge_summary([self.z_sum, self.G_sum, self.g_loss_sum])
@@ -697,9 +697,9 @@ def train(gan):
 			_, summary_str_2 = gan.sess.run([gan.g_optim, gan.g_sum],
 				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
 
-			# # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-			# _, summary_str_3 = gan.sess.run([gan.g_optim, gan.g_sum],
-			# 	feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
+			# Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
+			_, summary_str_3 = gan.sess.run([gan.g_optim, gan.g_sum],
+				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
 
 			x_recon, errD, errG, step = gan.sess.run([gan.x_, gan.d_loss, gan.g_loss, gan.global_step],
 				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
@@ -710,7 +710,7 @@ def train(gan):
 			if FLAGS.if_summary:
 				gan.train_writer.add_summary(summary_str_1, step)
 				gan.train_writer.add_summary(summary_str_2, step)
-				# gan.train_writer.add_summary(summary_str_3, step)
+				gan.train_writer.add_summary(summary_str_3, step)
 				gan.train_writer.flush()
 				if FLAGS.train_net:
 					print "STEP", '%03d' % (step), "Epo", '%03d' % (epoch_show), "ba", '%03d' % (batch_show), \
