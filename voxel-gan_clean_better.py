@@ -374,7 +374,7 @@ class VariationalAutoencoder(object):
 
 			with slim.arg_scope([slim.fully_connected], trainable=FLAGS.train_net):
 				input_shape=[None, 27000]
-				dyn_batch_size = tf.shape(input_sample)[0]
+				dyn_batch_size = tf.shape(input_tensor)[0]
 				# x_tensor = tf.reshape(input_tensor, [-1, 30, 30, 30, 1])
 				noisy_x = input_tensor + tf.random_normal(tf.pack([dyn_batch_size, 32, 32, 32, 1]))
 				current_input = noisy_x
