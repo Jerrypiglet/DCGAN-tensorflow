@@ -365,7 +365,7 @@ class VariationalAutoencoder(object):
 
 		self.g_sum = tf.merge_summary([self.z_sum, self.G_sum, self.g_loss_sum])
 		self.d_sum = tf.merge_summary(
-				[self.z_sum, self.G_sum, self.d_loss_real_sum, self.d_loss_sum])
+				[self.z_sum, self.G_sum, self.d_loss_sum])
 
 	def BatchNorm(self, inputT, trainable, scope=None):
 		if trainable:
