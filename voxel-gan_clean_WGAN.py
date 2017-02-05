@@ -39,7 +39,7 @@ flags.DEFINE_boolean("restore_encoder0", False, "training net 1 and restoring ne
 flags.DEFINE_integer("n_z", 100, "hidden size")
 flags.DEFINE_integer("batch_size", 200, "batch_size")
 flags.DEFINE_integer("models_in_batch", 40, "models in a batch")
-flags.DEFINE_float("learning_rate", 0.001, "learning rate")
+flags.DEFINE_float("learning_rate", 1e-4, "learning rate")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
 # flags.DEFINE_float("reweight_recon", 1.0, "weight for recon loss")
 # flags.DEFINE_float("reweight_reproj", 0.0, "weight for reproj loss")
@@ -192,13 +192,13 @@ class VariationalAutoencoder(object):
 		print [var.name for var in t_vars if 'discriminator' in var.name]
 		print [var.name for var in t_vars if 'generator' in var.name]
 
-		learning_rate_ger = 5e-5
-		learning_rate_dis = 5e-5
+		learning_rate_ger = FLAGS.learning_rate
+		learning_rate_dis = FLAGS.learning_rate
 		# update Citers times of critic in one iter(unless i < 25 or i % 500 == 0, i is iterstep)
 		self.Citers = 5
 		# the upper bound and lower bound of parameters in critic
-		clamp_lower = -0.01
-		clamp_upper = 0.01
+		clamp_lower = -0.05
+		clamp_upper = 0.05
 		# whether to use adam for parameter update, if the flag is set False, use tf.train.RMSPropOptimizer
 		# as recommended in paper
 		is_adam = False
