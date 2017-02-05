@@ -503,33 +503,33 @@ def train(gan):
 			# 	feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
 
 			if i < 25 or i % 500 == 0:
-                citers = 100
-            else:
-                citers = self.Citers
-            for j in range(citers):
-            	feed_dict = next_feed_dict()
-                if i % 100 == 99 and j == 0:
-                    run_options = tf.RunOptions(
-                        trace_level=tf.RunOptions.FULL_TRACE)
-                    run_metadata = tf.RunMetadata()
-                    _, merged = sess.run([self.opt_c, merged_all], feed_dict=feed_dict,
-                                         options=run_options, run_metadata=run_metadata)
-                    gan.train_writer.add_summary(merged, i)
-                    gan.train_writer.add_run_metadata(
-                        run_metadata, 'critic_metadata {}'.format(i), i)
-                else:
-                    sess.run(self.opt_c, feed_dict=feed_dict)                
-            feed_dict = next_feed_dict()
-            if i % 100 == 99:
-                _, merged = sess.run([self.opt_g, merged_all], feed_dict=feed_dict,
-                     options=run_options, run_metadata=run_metadata)
-                gan.train_writer.add_summary(merged, i)
-                gan.train_writer.add_run_metadata(
-                    run_metadata, 'generator_metadata {}'.format(i), i)
-            else:
-                sess.run(self.opt_g, feed_dict=feed_dict)
+				citers = 100
+			else:
+				citers = self.Citers
+			for j in range(citers):
+				feed_dict = next_feed_dict()
+				if i % 100 == 99 and j == 0:
+					run_options = tf.RunOptions(
+						trace_level=tf.RunOptions.FULL_TRACE)
+					run_metadata = tf.RunMetadata()
+					_, merged = sess.run([self.opt_c, merged_all], feed_dict=feed_dict,
+										 options=run_options, run_metadata=run_metadata)
+					gan.train_writer.add_summary(merged, i)
+					gan.train_writer.add_run_metadata(
+						run_metadata, 'critic_metadata {}'.format(i), i)
+				else:
+					sess.run(self.opt_c, feed_dict=feed_dict)                
+			feed_dict = next_feed_dict()
+			if i % 100 == 99:
+				_, merged = sess.run([self.opt_g, merged_all], feed_dict=feed_dict,
+					 options=run_options, run_metadata=run_metadata)
+				gan.train_writer.add_summary(merged, i)
+				gan.train_writer.add_run_metadata(
+					run_metadata, 'generator_metadata {}'.format(i), i)
+			else:
+				sess.run(self.opt_g, feed_dict=feed_dict)
 
-            step = i
+			step = i
 			epoch_show = math.floor(float(step) * FLAGS.models_in_batch / float(num_samples))
 			batch_show = math.floor(step - epoch_show * (num_samples / FLAGS.models_in_batch))
 
