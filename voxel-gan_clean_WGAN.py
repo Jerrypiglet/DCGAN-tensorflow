@@ -469,25 +469,6 @@ def train(gan):
 				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True}
 				return feed_dict
 
-			# # Update D network
-			# if accu < 0.7:
-			# 	_, summary_str_1 = gan.sess.run([gan.d_optim, gan.d_sum],
-			# 		feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
-			# else:
-			# 	summary_str_1 = gan.sess.run(gan.d_sum,
-			# 		feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
-
-			# # Update G network
-			# _, summary_str_2 = gan.sess.run([gan.g_optim, gan.g_sum],
-			# 	feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
-
-			# # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-			# _, summary_str_3 = gan.sess.run([gan.g_optim, gan.g_sum],
-			# 	feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
-
-			# x_recon, errD_fake, errD_real, errG, step = gan.sess.run([gan.G, gan.d_loss_fake, gan.d_loss_real, gan.g_loss, gan.global_step],
-			# 	feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
-
 			def write_to_screen():
 				start_time = time.time()
 				feed_dict = next_feed_dict()
@@ -527,27 +508,21 @@ def train(gan):
 				citers = gan.Citers
 			for j in range(citers):
 				feed_dict = next_feed_dict()
-				if i % 100 == 99 and j == 0:
-					run_options = tf.RunOptions(
-						trace_level=tf.RunOptions.FULL_TRACE)
-					run_metadata = tf.RunMetadata()
-					_, merged = gan.sess.run([gan.opt_c, tf.merged_summary], feed_dict=feed_dict,
-										 options=run_options, run_metadata=run_metadata)
-					gan.train_writer.add_summary(merged, i)
-					gan.train_writer.add_run_metadata(
-						run_metadata, 'critic_metadata {}'.format(i), i)
-				else:
-					gan.sess.run(gan.opt_c, feed_dict=feed_dict)
-				write_to_screen()                
-			feed_dict = next_feed_dict()
-			if i % 100 == 99:
-				_, merged = sess.run([gan.opt_g, tf.merged_summary], feed_dict=feed_dict,
-					 options=run_options, run_metadata=run_metadata)
+				run_options = tf.RunOptions(
+					trace_level=tf.RunOptions.FULL_TRACE)
+				run_metadata = tf.RunMetadata()
+				_, merged = gan.sess.run([gan.opt_c, tf.merged_summary], feed_dict=feed_dict,
+									 options=run_options, run_metadata=run_metadata)
 				gan.train_writer.add_summary(merged, i)
 				gan.train_writer.add_run_metadata(
-					run_metadata, 'generator_metadata {}'.format(i), i)
-			else:
-				gan.sess.run(gan.opt_g, feed_dict=feed_dict)
+					run_metadata, 'critic_metadata {}'.format(i), i)
+				write_to_screen()                
+			feed_dict = next_feed_dict()
+			_, merged = sess.run([gan.opt_g, tf.merged_summary], feed_dict=feed_dict,
+				 options=run_options, run_metadata=run_metadata)
+			gan.train_writer.add_summary(merged, i)
+			gan.train_writer.add_run_metadata(
+				run_metadata, 'generator_metadata {}'.format(i), i)
 			write_to_screen()
 
 			i = i + 1
