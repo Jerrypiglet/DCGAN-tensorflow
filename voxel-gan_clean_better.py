@@ -373,7 +373,7 @@ class VariationalAutoencoder(object):
 
 		# slim.get_variables_to_restore(include=["encoder0","decoder0","step"])
 
-		self.d_optim = tf.train.AdamOptimizer(1e-6, beta1=FLAGS.beta1) \
+		self.d_optim = tf.train.AdamOptimizer(5e-6, beta1=FLAGS.beta1) \
 							.minimize(self.d_loss, var_list=self.d_vars)
 		self.g_optim = tf.train.AdamOptimizer(1e-4, beta1=FLAGS.beta1) \
 							.minimize(self.g_loss, var_list=self.g_vars)
