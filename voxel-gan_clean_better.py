@@ -685,7 +685,7 @@ def train(gan):
 			# _, summary_str_3 = gan.sess.run([gan.g_optim, gan.g_sum],
 			# 	feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
 
-			x_recon, errD, errG, step = gan.sess.run([gan.G, gan.d_loss, gan.g_loss, gan.global_step],
+			x_recon, errD, errG, step = gan.sess.run([gan.x_, gan.d_loss, gan.g_loss, gan.global_step],
 				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
 
 			epoch_show = math.floor(float(step) * FLAGS.models_in_batch / float(num_samples))
