@@ -198,9 +198,9 @@ class VariationalAutoencoder(object):
 						summaries = 'gradient_norm')
 
 		counter_c = tf.Variable(trainable=False, initial_value=0, dtype=tf.int32)
-		self.opt_c = ly.optimize_loss(loss=self.c_loss, learning_rate=learning_rate_dis,
+		self.opt_c = ly.optimize_loss(loss=self.d_loss, learning_rate=learning_rate_dis,
 						optimizer=tf.train.AdamOptimizer if is_adam is True else tf.train.RMSPropOptimizer, 
-						variables=theta_c, global_step=counter_c,
+						variables=self.d_vars, global_step=counter_c,
 						summaries = 'gradient_norm')
 		clipped_var_c = [tf.assign(var, tf.clip_by_value(var, clamp_lower, clamp_upper)) for var in self.d_vars]
 		# merge the clip operations on critic variables
