@@ -511,14 +511,15 @@ def train(gan):
 				run_options = tf.RunOptions(
 					trace_level=tf.RunOptions.FULL_TRACE)
 				run_metadata = tf.RunMetadata()
-				_, merged = gan.sess.run([gan.opt_c, tf.merged_summary], feed_dict=feed_dict,
+				_, merged = gan.sess.run([gan.opt_c, gan.merged_summary], feed_dict=feed_dict,
 									 options=run_options, run_metadata=run_metadata)
 				gan.train_writer.add_summary(merged, i)
 				gan.train_writer.add_run_metadata(
 					run_metadata, 'critic_metadata {}'.format(i), i)
-				write_to_screen()                
+				write_to_screen()
+
 			feed_dict = next_feed_dict()
-			_, merged = sess.run([gan.opt_g, tf.merged_summary], feed_dict=feed_dict,
+			_, merged = sess.run([gan.opt_g, gan.merged_summary], feed_dict=feed_dict,
 				 options=run_options, run_metadata=run_metadata)
 			gan.train_writer.add_summary(merged, i)
 			gan.train_writer.add_run_metadata(
