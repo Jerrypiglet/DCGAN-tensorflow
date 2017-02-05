@@ -412,7 +412,7 @@ class VariationalAutoencoder(object):
 						# bn_func = BatchNormalization([kernel_shape[4]], scope)
 						# bn_func = batch_norm(name=scope)
 						current_output = transfer_fct(
-							BatchNorm(
+							self.BatchNorm(
 								tf.add(conv3d(current_input, kernel), biases), trainable=True
 								)
 							)
