@@ -165,9 +165,9 @@ class VirtualBatchNormalization(object):
 
 	def __call__(self, x):
 		shape = x.get_shape().as_list()
+		needs_reshape = len(shape) != 4
 		shape[0] = self.dyn_batch_size
 		shape = tf.pack(shape)
-		needs_reshape = len(shape) != 4
 
 		if needs_reshape:
 			orig_shape = shape
