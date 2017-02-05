@@ -220,7 +220,7 @@ class VariationalAutoencoder(object):
 	def BatchNorm(self, inputT, trainable=True, scope=None, reuse=None):
 		if trainable:
 			print '########### BN trainable!!!'
-		return tflearn.layers.normalization.batch_normalization(inputT, trainable=trainable, scope=scope, reuse=reuse)
+		return tflearn.layers.normalization.batch_normalization(inputT, trainable=trainable, scope=scope, reuse=None)
 
 	def _discriminator(self, input_tensor, trainable=True, reuse=False):
 		with tf.variable_scope("discriminator") as scope:
