@@ -160,7 +160,7 @@ class VirtualBatchNormalization(object):
 			out = self._normalize(x, self.mean, self.mean_sq, "reference")
 			if needs_reshape:
 				print orig_shape
-				out = tf.reshape(out, orig_shape)
+				out = tf.reshape(out, tf.pack(orig_shape))
 			self.reference_output = out
 
 	def __call__(self, x):
