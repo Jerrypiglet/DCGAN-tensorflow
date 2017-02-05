@@ -476,10 +476,12 @@ def train(gan):
 				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True}
 				return feed_dict
 
-			def write_to_screen():
+			def write_to_screen(merged):
 				start_time = time.time()
 				feed_dict = next_feed_dict()
 				G, d_loss, g_loss, step = gan.sess.run([gan.G, gan.d_loss, gan.g_loss, gan.global_step], feed_dict=feed_dict)
+
+				gan.train_writer.add_summary(merged, step)
 
 				epoch_show = math.floor(float(step) * FLAGS.models_in_batch / float(num_samples))
 				batch_show = math.floor(step - epoch_show * (num_samples / FLAGS.models_in_batch))
@@ -520,18 +522,18 @@ def train(gan):
 				# run_metadata = tf.RunMetadata()
 				_, merged = gan.sess.run([gan.opt_c, gan.merged_summary], feed_dict=feed_dict)
 									 # options=run_options, run_metadata=run_metadata)
-				gan.train_writer.add_summary(merged, i)
+				# gan.train_writer.add_summary(merged, i)
 				# gan.train_writer.add_run_metadata(
 				# 	run_metadata, 'critic_metadata {}'.format(i), i)
-				write_to_screen()
+				write_to_screen(merged)
 
 			feed_dict = next_feed_dict()
 			_, merged = gan.sess.run([gan.opt_g, gan.merged_summary], feed_dict=feed_dict)
 				 # options=run_options, run_metadata=run_metadata)
-			gan.train_writer.add_summary(merged, i)
+			# gan.train_writer.add_summary(merged, i)
 			# gan.train_writer.add_run_metadata(
 			# 	run_metadata, 'generator_metadata {}'.format(i), i)
-			write_to_screen()
+			write_to_screen(merged)
 
 			i = i + 1
 	except tf.errors.OutOfRangeError:
