@@ -500,9 +500,8 @@ def train(gan):
 
 			def write_to_screen():
 				feed_dict = next_feed_dict()
-				G, d_loss, g_loss = gan.sess.run([gan.G, gan.d_loss, gan.g_loss], feed_dict=feed_dict)
-
-				step = i
+				G, d_loss, g_loss, step = gan.sess.run([gan.G, gan.d_loss, gan.g_loss, gan.global_step], feed_dict=feed_dict)
+				
 				epoch_show = math.floor(float(step) * FLAGS.models_in_batch / float(num_samples))
 				batch_show = math.floor(step - epoch_show * (num_samples / FLAGS.models_in_batch))
 
