@@ -358,7 +358,7 @@ class VariationalAutoencoder(object):
 
 		# slim.get_variables_to_restore(include=["encoder0","decoder0","step"])
 
-		self.d_optim = tf.train.AdamOptimizer(1e-4, beta1=FLAGS.beta1) \
+		self.d_optim = tf.train.AdamOptimizer(1e-5, beta1=FLAGS.beta1) \
 							.minimize(self.d_loss, var_list=self.d_vars)
 		self.g_optim = tf.train.AdamOptimizer(1e-4, beta1=FLAGS.beta1) \
 							.minimize(self.g_loss, var_list=self.g_vars)
@@ -394,10 +394,10 @@ class VariationalAutoencoder(object):
 
 					if if_batch_norm:
 						print scope
-						# bn_func = BatchNormalization([kernel_shape[4]], scope)
+						bn_func = BatchNormalization([kernel_shape[4]], scope)
 						current_output = transfer_fct(
-							self.BatchNorm(
-								tf.add(conv3d(current_input, kernel), biases), trainable=trainable, scope=scope
+							self.bn_func(
+								tf.add(conv3d(current_input, kernel), biases), True
 								)
 							)
 					else:
