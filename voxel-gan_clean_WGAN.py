@@ -293,8 +293,8 @@ class VariationalAutoencoder(object):
 				# kernel = tf.Variable(
 				# 	tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
 				# 	trainable=trainable)
-				kernel = tf.Variable(tf.random_normal(kernel_shape, stddev=0.02))
-				biases = tf.Variable(tf.zeros(shape=[kernel_shape[-2]], dtype=tf.float32), trainable=trainable)
+				kernel = tf.Variable(tf.random_normal(kernel_shape, stddev=0.02), name=scope+'kernel')
+				biases = tf.Variable(tf.zeros(shape=[kernel_shape[-2]], dtype=tf.float32), trainable=trainable, name=scope+'bias')
 				if if_batch_norm:
 					current_output = transfer_fct(
 						self.BatchNorm(tf.reshape(
