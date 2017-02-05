@@ -77,7 +77,6 @@ class VariationalAutoencoder(object):
 		self.transfer_fct = transfer_fct
 		self.transfer_fct_conv = lrelu
 		# self.batch_normalization = batch_normalization
-		self.dropout = dropout
 		self.learning_rate = params['learning_rate']
 		self.batch_size = self.params['batch_size']
 		self.z_size = self.params["n_z"]
@@ -195,12 +194,6 @@ class VariationalAutoencoder(object):
 			self.merged_summaries0_test = tf.merge_summary(summaries0_test)
 
 	def BatchNorm(self, inputT, trainable, scope=None):
-		# Note: is_training is tf.placeholder(tf.bool) type
-		# return tf.cond(self.is_training,
-		# 	lambda: batch_norm(inputT, is_training=True,
-		# 		center=False, updates_collections=None, scope=scope),
-		# 	lambda: batch_norm(inputT, is_training=False,
-		# 		updates_collections=None, center=False, reuse = True, scope=scope))
 		if trainable:
 			print '########### BN trainable!!!'
 		return tflearn.layers.normalization.batch_normalization(inputT, trainable=trainable)
