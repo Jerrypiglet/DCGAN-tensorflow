@@ -505,7 +505,7 @@ class VariationalAutoencoder(object):
 			current_input = deconv_layer(current_input, [4, 4, 4, 1, 32], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 30, 30, 30, 1]), 'BN-deconv-3', transfer_fct_none, is_training=self.is_training, if_batch_norm=False, padding="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
 			print '---------- _<<< generator: flatten length:', self.flatten_length
-			return (tf.nn.tanh(current_input), current_input)
+			return (tf.nn.sigmoid(current_input), current_input)
 
 	# def _train_align0(self, is_training):
 	# 	_, cost, cost_recon, cost_gan, merged, \
