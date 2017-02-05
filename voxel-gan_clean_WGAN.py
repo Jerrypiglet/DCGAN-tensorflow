@@ -110,9 +110,7 @@ class VariationalAutoencoder(object):
 		# config.log_device_placement = True
 		config.allow_soft_placement = True
 		self.sess = tf.Session(config=config)
-		init_op = tf.group(tf.initialize_all_variables(),
-					   tf.initialize_local_variables())
-		self.sess.run(init_op)
+		self.sess.run(tf.global_variables_initializer())
 		# # Start input enqueue threads.
 		self.coord = tf.train.Coordinator()
 		self.threads = tf.train.start_queue_runners(sess=self.sess, coord=self.coord)
@@ -154,36 +152,24 @@ class VariationalAutoencoder(object):
 		with tf.device('/gpu:0'):
 			self.z = tf.placeholder(tf.float32, [None, self.z_size], name='z')
 			self.z_sum = tf.histogram_summary("z", self.z)
-			self.D, self.D_logits = self._discriminator(self.x0)
-			self.G, self.G_ = self._generator(self.z)
-			self.G_sum = tf.histogram_summary("G", tf.reshape(self.G_, [-1]))
+			self.D_logits = self._discriminator(self.x0)
+			self.G, self.G_noGate = self._generator(self.z)
+			self.G_sum = tf.histogram_summary("G", tf.reshape(self.G_noGate, [-1]))
 
 		with tf.device('/gpu:0'):
-			self.D_, self.D_logits_ = self._discriminator(self.G, reuse=True)
+			self.D_logits_ = self._discriminator(self.G, reuse=True)
 
 	def _create_loss_optimizer(self):
 		self.d_loss_real = tf.reduce_mean(
-			tf.nn.sigmoid_cross_entropy_with_logits(
-				logits=self.D_logits, targets=tf.ones_like(self.D)))
+			- self.D_logits)
 		self.d_loss_fake = tf.reduce_mean(
-			tf.nn.sigmoid_cross_entropy_with_logits(
-				logits=self.D_logits_, targets=tf.zeros_like(self.D_)))
-		# self.d_loss_real = tf.reduce_mean(
-		# 	tf.nn.sparse_softmax_cross_entropy_with_logits(
-		# 		logits=self.D_logits, labels=tf.ones([self.batch_size], dtype=tf.int64)))
-		# self.d_loss_fake = tf.reduce_mean(
-		# 	tf.nn.sparse_softmax_cross_entropy_with_logits(
-		# 		logits=self.D_logits_, labels=tf.zeros([self.batch_size], dtype=tf.int64)))
-
-		self.accu_real = tf.reduce_mean(self.D)
-		self.accu_fake = 1. - tf.reduce_mean(self.D_)
+			self.D_logits_)
+		self.g_loss = tf.reduce_mean(
+			- self.D_logits_)
 
 		self.g_loss = tf.reduce_mean(
 			tf.nn.sigmoid_cross_entropy_with_logits(
 				logits=self.D_logits_, targets=tf.ones_like(self.D_)))
-		# self.g_loss = tf.reduce_mean(
-		# 	tf.nn.sparse_softmax_cross_entropy_with_logits(
-		# 		logits=self.D_logits_, labels=tf.ones([self.batch_size], dtype=tf.int64)))
 
 		self.d_loss_real_sum = tf.scalar_summary("d_loss_real", self.d_loss_real)
 		self.d_loss_fake_sum = tf.scalar_summary("d_loss_fake", self.d_loss_fake)
@@ -194,18 +180,40 @@ class VariationalAutoencoder(object):
 		self.d_loss_sum = tf.scalar_summary("d_loss", self.d_loss)
 
 		t_vars = tf.trainable_variables()
-		# print t_vars
-		# print slim.get_variables_to_restore(include=["discriminator", "generator"])
 		self.d_vars = [var for var in t_vars if 'discriminator' in var.name]
-		# print [var.name for var in t_vars if 'discriminator' in var.name]
 		self.g_vars = [var for var in t_vars if 'generator' in var.name]
 
-		# slim.get_variables_to_restore(include=["encoder0","decoder0","step"])
+		learning_rate_ger = 5e-5
+		learning_rate_dis = 5e-5
+		# update Citers times of critic in one iter(unless i < 25 or i % 500 == 0, i is iterstep)
+		self.Citers = 5
+		# the upper bound and lower bound of parameters in critic
+		clamp_lower = -0.01
+		clamp_upper = 0.01
+		# whether to use adam for parameter update, if the flag is set False, use tf.train.RMSPropOptimizer
+		# as recommended in paper
+		is_adam = False
 
-		self.d_optim = tf.train.AdamOptimizer(1e-5, beta1=FLAGS.beta1) \
-							.minimize(self.d_loss, var_list=self.d_vars)
-		self.g_optim = tf.train.AdamOptimizer(0.00002, beta1=FLAGS.beta1) \
-							.minimize(self.g_loss, var_list=self.g_vars)
+		counter_g = tf.Variable(trainable=False, initial_value=0, dtype=tf.int32)
+		self.opt_g = ly.optimize_loss(loss=self.g_loss, learning_rate=learning_rate_ger,
+						optimizer=tf.train.AdamOptimizer if is_adam is True else tf.train.RMSPropOptimizer, 
+						variables=self.g_vars, global_step=counter_g,
+						summaries = 'gradient_norm')
+
+		counter_c = tf.Variable(trainable=False, initial_value=0, dtype=tf.int32)
+		self.opt_c = ly.optimize_loss(loss=self.c_loss, learning_rate=learning_rate_dis,
+						optimizer=tf.train.AdamOptimizer if is_adam is True else tf.train.RMSPropOptimizer, 
+						variables=theta_c, global_step=counter_c,
+						summaries = 'gradient_norm')
+		clipped_var_c = [tf.assign(var, tf.clip_by_value(var, clamp_lower, clamp_upper)) for var in self.d_vars]
+		# merge the clip operations on critic variables
+		with tf.control_dependencies([self.opt_c]):
+			self.opt_c = tf.tuple(clipped_var_c)
+
+		# self.d_optim = tf.train.AdamOptimizer(1e-5, beta1=FLAGS.beta1) \
+		# 					.minimize(self.d_loss, var_list=self.d_vars)
+		# self.g_optim = tf.train.AdamOptimizer(0.00002, beta1=FLAGS.beta1) \
+		# 					.minimize(self.g_loss, var_list=self.g_vars)
 
 		self.g_sum = tf.merge_summary([self.z_sum, self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
 		self.d_sum = tf.merge_summary(
@@ -268,7 +276,7 @@ class VariationalAutoencoder(object):
 				hidden_tensor = tf.contrib.layers.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable)
 				hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable)
 				hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, 1, activation_fn=None, trainable=trainable)
-				return (tf.nn.sigmoid(hidden_tensor), hidden_tensor)
+				return hidden_tensor
 
 	def _generator(self, input_sample, trainable=True):
 		with tf.variable_scope("generator") as scope:
@@ -315,25 +323,6 @@ class VariationalAutoencoder(object):
 			print current_input.get_shape().as_list()
 			print '---------- _<<< generator: flatten length:', self.flatten_length
 			return (tf.nn.sigmoid(current_input), current_input)
-
-	# def _train_align0(self, is_training):
-	# 	_, cost, cost_recon, cost_gan, merged, \
-	# 	x0_reduce, x, x_recon, x_idx, z_mean, z_log_sigma_sq, z, steps, is_training = self.sess.run(
-	# 		(self.optimizer, self.cost, self.recon_loss0, self.latent_loss0, self.merged_summaries0, \
-	# 			self.x0_reduce, self.x0, self.x0_recon, self.gen.x0_batch_idx, self.z0_mean, self.z0_log_sigma_sq, self.z0, self.global_step, self.is_training), \
-	# 		feed_dict={self.is_training: True, self.gen.is_training: True, self.is_queue: True, self.train_net: True})
-	# 	print x0_reduce[:1]
-	# 	print z_mean[:2], np.amax(z_mean), np.amin(z_mean)
-	# 	std_diev = np.sqrt(np.exp(z_log_sigma_sq[:2]))
-	# 	print std_diev, np.amax(std_diev), np.amin(std_diev)
-	# 	return (cost, cost_recon, cost_gan, merged, x, x_recon, x_idx, z_mean, z_log_sigma_sq, z, steps)
-
-	# def _test_align0(self, is_training):
-	# 	cost, cost_recon, cost_gan, merged, x, x_recon, x_idx, z_mean, z_log_sigma_sq, z, steps, is_training = self.sess.run(
-	# 		(self.cost, self.recon_loss0, self.latent_loss0, self.merged_summaries0_test, \
-	# 			self.x0, self.x0_recon, self.gen.x0_batch_idx, self.z0_mean, self.z0_log_sigma_sq, self.z0, self.global_step, self.is_training), \
-	# 		feed_dict={self.is_training: False, self.gen.is_training: False, self.is_queue: True, self.train_net: True})
-	# 	return (cost, cost_recon, cost_gan, merged, x, x_recon, x_idx, z_mean, z_log_sigma_sq, z, steps)
 
 def draw_sample(fig, data, ms, colormap='rainbow', camera_view=False, p=None):
 	# data = np.reshape(data, (30, 30, 30))
@@ -482,43 +471,72 @@ def prepare_for_training(gan):
 def train(gan):
 	prepare_for_training(gan)
 	# sample_z = np.random.uniform(-1, 1, size=(gan.batch_size, gan.z_size))
+	i = 0
+	merged_all = tf.summary.merge_all()
 	try:
 		while not gan.coord.should_stop():
 			start_time = time.time()
 
-			batch_z = np.random.normal(0., 1., [gan.batch_size, gan.z_size]) \
-							.astype(np.float32)
+			def next_feed_dict():
+				batch_z = np.random.normal(0., 1., [gan.batch_size, gan.z_size]) \
+								.astype(np.float32)
+				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True}
+				return feed_dict
 
-			accu_real, accu_fake = gan.sess.run([gan.accu_real, gan.accu_fake],
-				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
-			accu = 0.5 *(accu_real + accu_fake)
-			print accu, accu_fake, accu_real
-			# Update D network
-			if accu < 0.7:
-				_, summary_str_1 = gan.sess.run([gan.d_optim, gan.d_sum],
-					feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
-			else:
-				summary_str_1 = gan.sess.run(gan.d_sum,
-					feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
+			# # Update D network
+			# if accu < 0.7:
+			# 	_, summary_str_1 = gan.sess.run([gan.d_optim, gan.d_sum],
+			# 		feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
+			# else:
+			# 	summary_str_1 = gan.sess.run(gan.d_sum,
+			# 		feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
 
-			# Update G network
-			_, summary_str_2 = gan.sess.run([gan.g_optim, gan.g_sum],
-				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
+			# # Update G network
+			# _, summary_str_2 = gan.sess.run([gan.g_optim, gan.g_sum],
+			# 	feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
 
-			# Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-			_, summary_str_3 = gan.sess.run([gan.g_optim, gan.g_sum],
-				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
+			# # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
+			# _, summary_str_3 = gan.sess.run([gan.g_optim, gan.g_sum],
+			# 	feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
 
-			x_recon, errD_fake, errD_real, errG, step = gan.sess.run([gan.G, gan.d_loss_fake, gan.d_loss_real, gan.g_loss, gan.global_step],
-				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
+			# x_recon, errD_fake, errD_real, errG, step = gan.sess.run([gan.G, gan.d_loss_fake, gan.d_loss_real, gan.g_loss, gan.global_step],
+			# 	feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
 
+			if i < 25 or i % 500 == 0:
+                citers = 100
+            else:
+                citers = self.Citers
+            for j in range(citers):
+            	feed_dict = next_feed_dict()
+                if i % 100 == 99 and j == 0:
+                    run_options = tf.RunOptions(
+                        trace_level=tf.RunOptions.FULL_TRACE)
+                    run_metadata = tf.RunMetadata()
+                    _, merged = sess.run([self.opt_c, merged_all], feed_dict=feed_dict,
+                                         options=run_options, run_metadata=run_metadata)
+                    gan.train_writer.add_summary(merged, i)
+                    gan.train_writer.add_run_metadata(
+                        run_metadata, 'critic_metadata {}'.format(i), i)
+                else:
+                    sess.run(self.opt_c, feed_dict=feed_dict)                
+            feed_dict = next_feed_dict()
+            if i % 100 == 99:
+                _, merged = sess.run([self.opt_g, merged_all], feed_dict=feed_dict,
+                     options=run_options, run_metadata=run_metadata)
+                gan.train_writer.add_summary(merged, i)
+                gan.train_writer.add_run_metadata(
+                    run_metadata, 'generator_metadata {}'.format(i), i)
+            else:
+                sess.run(self.opt_g, feed_dict=feed_dict)
+
+            step = i
 			epoch_show = math.floor(float(step) * FLAGS.models_in_batch / float(num_samples))
 			batch_show = math.floor(step - epoch_show * (num_samples / FLAGS.models_in_batch))
 
 			if FLAGS.if_summary:
-				gan.train_writer.add_summary(summary_str_1, step)
-				gan.train_writer.add_summary(summary_str_2, step)
-				gan.train_writer.add_summary(summary_str_3, step)
+				# gan.train_writer.add_summary(summary_str_1, step)
+				# gan.train_writer.add_summary(summary_str_2, step)
+				# gan.train_writer.add_summary(summary_str_3, step)
 				gan.train_writer.flush()
 				if FLAGS.train_net:
 					print "STEP", '%03d' % (step), "Epo", '%03d' % (epoch_show), "ba", '%03d' % (batch_show), \
@@ -527,17 +545,6 @@ def train(gan):
 			if FLAGS.if_save and step != 0 and step % FLAGS.save_every_step == 0:
 				save_gan(gan, step, epoch_show, batch_show)
 
-			# if FLAGS.if_test and step % FLAGS.test_every_step == 0 and step != 0:
-			# if FLAGS.train_net:
-			# 	cost, cost_recon, cost_gan, merged, x, x_recon, x_idx, z_mean, z_log_sigma_sq, z, step = gan._test_align0(is_training=False)
-			# if FLAGS.if_summary:
-			# 	gan.train_writer.add_summary(merged, step)
-			# 	gan.train_writer.flush()
-			# 	if FLAGS.train_net:
-			# 		print "TESTING net 0... "\
-			# 		"cost =", "%.4f = %.4f + %.4f" % (\
-			# 			cost, cost_recon * FLAGS.reweight_recon, cost_gan * FLAGS.reweight_gan), \
-			# 		"-- recon = %.4f, gan = %.4f" % (cost_recon / gan.x_size, cost_gan)
 			if FLAGS.if_draw and step % FLAGS.draw_every == 0:
 				print 'Drawing reconstructed sample from testing batch...'
 				# plt.figure(1)
@@ -559,36 +566,10 @@ def train(gan):
 				pltfig_3d.suptitle('Reconstructed models at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
 				pltfig_3d.canvas.draw()
 				pltfig_3d.savefig(params['summary_folder']+'/%d-pltfig_3d_recon.png'%step)
-				# if FLAGS.train_net == False:
-				# 	plt.figure(5)
-				# 	for test_idx in range(15):
-				# 		plt.subplot(3, 5, test_idx+1)
-				# 		plt.imshow(((x2d_rgb[test_idx] + 0.5) * 255.).astype(np.uint8))
-				# 		plt.axis('off')
-				# 	pltfig_2d.suptitle('Target RGB image at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
-				# 	pltfig_2d.canvas.draw()
-				# 	pltfig_2d.savefig(params['summary_folder']+'/%d-pltfig_rgb.png'%step)
-				# 	plt.figure(6)
-				# 	for test_idx in range(15):
-				# 		im = draw_sample(figM_2d, x_proj[test_idx].reshape((30, 30, 1)), ms_2d, camera_view=True)
-				# 		plt.subplot(3, 5, test_idx+1)
-				# 		plt.imshow(im)
-				# 		plt.axis('off')
-				# 	pltfig_2d_reproj.suptitle('Reprojection at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
-				# 	pltfig_2d_reproj.canvas.draw()
-				# 	pltfig_2d_reproj.savefig(params['summary_folder']+'/%d-pltfig_2d_proj.png'%step)
-				# 	plt.figure(7)
-				# 	for test_idx in range(15):
-				# 		im = draw_sample(figM_2d, x2d_gnd[test_idx].reshape((30, 30, 1)), ms_2d, camera_view=True)
-				# 		plt.subplot(3, 5, test_idx+1)
-				# 		plt.imshow(im)
-				# 		plt.axis('off')
-				# 	pltfig_2d_reproj_gnd.suptitle('Gnd truth projection at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
-				# 	pltfig_2d_reproj_gnd.canvas.draw()
-				# 	pltfig_2d_reproj_gnd.savefig(params['summary_folder']+'/%d-pltfig_2d_gnd.png'%step)
 			end_time = time.time()
 			elapsed = end_time - start_time
 			print "--- Time %f seconds."%elapsed
+			i = i + 1
 	except tf.errors.OutOfRangeError:
 		print('Done training.')
 	finally:

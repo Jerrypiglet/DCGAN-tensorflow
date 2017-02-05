@@ -93,32 +93,35 @@ class DCGAN(object):
 
 		if self.y_dim:
 			self.G = self.generator(self.z, self.y)
-			self.D, self.D_logits = \
+			self.D_logits = \
 					self.discriminator(inputs, self.y, reuse=False)
 
 			self.sampler = self.sampler(self.z, self.y)
-			self.D_, self.D_logits_ = \
+			self.D_logits_ = \
 					self.discriminator(self.G, self.y, reuse=True)
 		else:
 			self.G = self.generator(self.z)
-			self.D, self.D_logits = self.discriminator(inputs)
+			self.D_logits = self.discriminator(inputs)
 
 			self.sampler = self.sampler(self.z)
-			self.D_, self.D_logits_ = self.discriminator(self.G, reuse=True)
+			self.D_logits_ = self.discriminator(self.G, reuse=True)
 
-		self.d_sum = histogram_summary("d", self.D)
-		self.d__sum = histogram_summary("d_", self.D_)
+		self.d_sum = histogram_summary("d", self.D_logits)
+		self.d__sum = histogram_summary("d_", self.D_logits_)
 		self.G_sum = image_summary("G", self.G)
 
 		self.d_loss_real = tf.reduce_mean(
-			tf.nn.sigmoid_cross_entropy_with_logits(
-				logits=self.D_logits, targets=tf.ones_like(self.D)))
+			# tf.nn.sigmoid_cross_entropy_with_logits(
+			# 	logits=self.D_logits, targets=tf.ones_like(self.D)))
+			- self.D_logits)
 		self.d_loss_fake = tf.reduce_mean(
-			tf.nn.sigmoid_cross_entropy_with_logits(
-				logits=self.D_logits_, targets=tf.zeros_like(self.D_)))
+			# tf.nn.sigmoid_cross_entropy_with_logits(
+			# 	logits=self.D_logits_, targets=tf.zeros_like(self.D_)))
+			self.D_logits_)
 		self.g_loss = tf.reduce_mean(
-			tf.nn.sigmoid_cross_entropy_with_logits(
-				logits=self.D_logits_, targets=tf.ones_like(self.D_)))
+			# tf.nn.sigmoid_cross_entropy_with_logits(
+			# 	logits=self.D_logits_, targets=tf.ones_like(self.D_)))
+			- self.D_logits_)
 
 		self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
 		self.d_loss_fake_sum = scalar_summary("d_loss_fake", self.d_loss_fake)
@@ -128,10 +131,13 @@ class DCGAN(object):
 		self.g_loss_sum = scalar_summary("g_loss", self.g_loss)
 		self.d_loss_sum = scalar_summary("d_loss", self.d_loss)
 
-		t_vars = tf.trainable_variables()
+		# t_vars = tf.trainable_variables()
 
-		self.d_vars = [var for var in t_vars if 'd_' in var.name]
-		self.g_vars = [var for var in t_vars if 'g_' in var.name]
+		# self.d_vars = [var for var in t_vars if 'd_' in var.name]
+		# self.g_vars = [var for var in t_vars if 'g_' in var.name]
+
+		self.d_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='d_')
+		self.g_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='g_')
 
 		self.saver = tf.train.Saver()
 
@@ -143,10 +149,37 @@ class DCGAN(object):
 			data = glob(os.path.join("./data", config.dataset, self.input_fname_pattern))
 		#np.random.shuffle(data)
 
-		d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
-							.minimize(self.d_loss, var_list=self.d_vars)
-		g_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
-							.minimize(self.g_loss, var_list=self.g_vars)
+		learning_rate_ger = 5e-5
+		learning_rate_dis = 5e-5
+		# update Citers times of critic in one iter(unless i < 25 or i % 500 == 0, i is iterstep)
+		Citers = 5
+		# the upper bound and lower bound of parameters in critic
+		clamp_lower = -0.01
+		clamp_upper = 0.01
+		# whether to use adam for parameter update, if the flag is set False, use tf.train.RMSPropOptimizer
+		# as recommended in paper
+		is_adam = False
+
+		counter_g = tf.Variable(trainable=False, initial_value=0, dtype=tf.int32)
+		opt_g = ly.optimize_loss(loss=self.g_loss, learning_rate=learning_rate_ger,
+						optimizer=tf.train.AdamOptimizer if is_adam is True else tf.train.RMSPropOptimizer, 
+						variables=self.g_vars, global_step=counter_g,
+						summaries = 'gradient_norm')
+
+		counter_c = tf.Variable(trainable=False, initial_value=0, dtype=tf.int32)
+		opt_c = ly.optimize_loss(loss=self.c_loss, learning_rate=learning_rate_dis,
+						optimizer=tf.train.AdamOptimizer if is_adam is True else tf.train.RMSPropOptimizer, 
+						variables=theta_c, global_step=counter_c,
+						summaries = 'gradient_norm')
+		clipped_var_c = [tf.assign(var, tf.clip_by_value(var, clamp_lower, clamp_upper)) for var in self.d_vars]
+		# merge the clip operations on critic variables
+		with tf.control_dependencies([opt_c]):
+			opt_c = tf.tuple(clipped_var_c)
+
+		# d_optim = tf.train.AdamOptimizer(learning_rate_dis, beta1=config.beta1) \
+		# 					.minimize(self.d_loss, var_list=self.d_vars)
+		# g_optim = tf.train.AdamOptimizer(learning_rate_ger, beta1=config.beta1) \
+		# 					.minimize(self.g_loss, var_list=self.g_vars)
 		try:
 			tf.global_variables_initializer().run()
 		except:
@@ -186,6 +219,19 @@ class DCGAN(object):
 		else:
 			print(" [!] Load failed...")
 
+		def next_feed_dict_mnist():
+			train_img = dataset.train.next_batch(batch_size)[0]
+			train_img = 2*train_img-1
+			if is_svhn is not True:
+				train_img = np.reshape(train_img, (-1, 28, 28))
+				train_img = np.pad(train_img, pad_width=npad,
+								   mode='constant', constant_values=-1)
+				train_img = np.expand_dims(train_img, -1)
+			batch_z = np.random.normal(0, 1, [batch_size, z_dim]) \
+				.astype(np.float32)
+			feed_dict = {real_data: train_img, z: batch_z}
+			return feed_dict
+
 		for epoch in xrange(config.epoch):
 			if config.dataset == 'mnist':
 				batch_idxs = min(len(data_X), config.train_size) // config.batch_size
@@ -217,40 +263,68 @@ class DCGAN(object):
 							.astype(np.float32)
 
 				if config.dataset == 'mnist':
-					# Update D network
-					_, summary_str = self.sess.run([d_optim, self.d_sum],
-						feed_dict={ 
-							self.inputs: batch_images,
-							self.z: batch_z,
-							self.y:batch_labels,
-						})
-					self.writer.add_summary(summary_str, counter)
+					# # Update D network
+					# _, summary_str = self.sess.run([d_optim, self.d_sum],
+					# 	feed_dict={ 
+					# 		self.inputs: batch_images,
+					# 		self.z: batch_z,
+					# 		self.y:batch_labels,
+					# 	})
+					# self.writer.add_summary(summary_str, counter)
 
-					# Update G network
-					_, summary_str = self.sess.run([g_optim, self.g_sum],
-						feed_dict={
-							self.z: batch_z, 
-							self.y:batch_labels,
-						})
-					self.writer.add_summary(summary_str, counter)
+					# # Update G network
+					# _, summary_str = self.sess.run([g_optim, self.g_sum],
+					# 	feed_dict={
+					# 		self.z: batch_z, 
+					# 		self.y:batch_labels,
+					# 	})
+					# self.writer.add_summary(summary_str, counter)
 
-					# Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-					_, summary_str = self.sess.run([g_optim, self.g_sum],
-						feed_dict={ self.z: batch_z, self.y:batch_labels })
-					self.writer.add_summary(summary_str, counter)
+					# # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
+					# _, summary_str = self.sess.run([g_optim, self.g_sum],
+					# 	feed_dict={ self.z: batch_z, self.y:batch_labels })
+					# self.writer.add_summary(summary_str, counter)
 					
-					errD_fake = self.d_loss_fake.eval({
-							self.z: batch_z, 
-							self.y:batch_labels
-					})
-					errD_real = self.d_loss_real.eval({
-							self.inputs: batch_images,
-							self.y:batch_labels
-					})
-					errG = self.g_loss.eval({
-							self.z: batch_z,
-							self.y: batch_labels
-					})
+					# errD_fake = self.d_loss_fake.eval({
+					# 		self.z: batch_z, 
+					# 		self.y:batch_labels
+					# })
+					# errD_real = self.d_loss_real.eval({
+					# 		self.inputs: batch_images,
+					# 		self.y:batch_labels
+					# })
+					# errG = self.g_loss.eval({
+					# 		self.z: batch_z,
+					# 		self.y: batch_labels
+					# })
+
+					i = idx
+					if i < 25 or i % 500 == 0:
+						citers = 100
+					else:
+						citers = Citers
+					for j in range(citers):
+						feed_dict = next_feed_dict()
+						if i % 100 == 99 and j == 0:
+							run_options = tf.RunOptions(
+								trace_level=tf.RunOptions.FULL_TRACE)
+							run_metadata = tf.RunMetadata()
+							_, merged = sess.run([opt_c, merged_all], feed_dict=feed_dict,
+												 options=run_options, run_metadata=run_metadata)
+							summary_writer.add_summary(merged, i)
+							summary_writer.add_run_metadata(
+								run_metadata, 'critic_metadata {}'.format(i), i)
+						else:
+							sess.run(opt_c, feed_dict=feed_dict)                
+					feed_dict = next_feed_dict()
+					if i % 100 == 99:
+						_, merged = sess.run([opt_g, merged_all], feed_dict=feed_dict,
+							 options=run_options, run_metadata=run_metadata)
+						summary_writer.add_summary(merged, i)
+						summary_writer.add_run_metadata(
+							run_metadata, 'generator_metadata {}'.format(i), i)
+					else:
+						sess.run(opt_g, feed_dict=feed_dict)    
 				else:
 					# Update D network
 					_, summary_str = self.sess.run([d_optim, self.d_sum],
@@ -313,14 +387,16 @@ class DCGAN(object):
 				scope.reuse_variables()
 
 			if not self.y_dim:
+				print "DISCRIMINAROT: not self.y_dim"
 				h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
 				h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, name='d_h1_conv')))
 				h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, name='d_h2_conv')))
 				h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, name='d_h3_conv')))
 				h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'd_h3_lin')
 
-				return tf.nn.sigmoid(h4), h4
+				return h4
 			else:
+				print "DISCRIMINAROT: self.y_dim"
 				yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
 				x = conv_cond_concat(image, yb)
 
@@ -336,7 +412,7 @@ class DCGAN(object):
 
 				h3 = linear(h2, 1, 'd_h3_lin')
 				
-				return tf.nn.sigmoid(h3), h3
+				return h3
 
 	def generator(self, z, y=None):
 		with tf.variable_scope("generator") as scope:
