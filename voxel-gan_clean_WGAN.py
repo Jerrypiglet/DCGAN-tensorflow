@@ -271,7 +271,7 @@ class VariationalAutoencoder(object):
 				print '---------- _>>> discriminator: flatten length:', self.flatten_length
 				hidden_tensor = tf.contrib.layers.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm)
 				hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm)
-				hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, 1, activation_fn=None, trainable=trainable, normalizer_fn=ly.batch_norm)
+				hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, 1, activation_fn=None, trainable=trainable)
 				return hidden_tensor
 
 	def _generator(self, input_sample, trainable=True):
