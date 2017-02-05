@@ -166,11 +166,7 @@ class VariationalAutoencoder(object):
 			self.D_logits_)
 		self.g_loss = tf.reduce_mean(
 			- self.D_logits_)
-
-		self.g_loss = tf.reduce_mean(
-			tf.nn.sigmoid_cross_entropy_with_logits(
-				logits=self.D_logits_, targets=tf.ones_like(self.D_)))
-
+		
 		self.d_loss_real_sum = tf.scalar_summary("d_loss_real", self.d_loss_real)
 		self.d_loss_fake_sum = tf.scalar_summary("d_loss_fake", self.d_loss_fake)
 													
