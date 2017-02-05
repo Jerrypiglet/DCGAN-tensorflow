@@ -262,19 +262,8 @@ class VariationalAutoencoder(object):
 		with tf.device('/gpu:1'):
 			with tf.variable_scope("recog_s"):
 				if FLAGS.if_gndS == False:
-					if FLAGS.if_alex == False:
-						x_reduce_size = 256
-						_, self.x_reduce_s = self._x2d_2_z_conv(self.x2d_rgb_norm, x_reduce_size)
-					else:
-						self.x_reduce_s = self._x2d_2_z_conv_alex(self.x2d_rgb_norm, trainable=FLAGS.if_s_trainable)
-					if FLAGS.if_alex == False:
-						self.z_mean = slim.fully_connected(slim.fully_connected(self.x_reduce_s, x_reduce_size, activation_fn=self.transfer_fct_conv), self.z_size, activation_fn=None)
-						# self.z_log_sigma_sq = slim.fully_connected(slim.fully_connected(self.x_reduce_s, x_reduce_size, activation_fn=self.transfer_fct_conv), self.z_size, activation_fn=None)
-					else:
-						self.z_mean = self._fcAfter_x2d_2_z_conv_alex(self.x_reduce_s, self.z_size, trainable=FLAGS.if_s_trainable)
-						# self.z_log_sigma_sq = self._fcAfter_x2d_2_z_conv_alex(self.x_reduce_s, self.z_size)
-					# eps = tf.random_normal(tf.pack([self.dyn_batch_size_x, self.z_size]))
-					# self.z = self.z_mean + eps * tf.exp(self.z_log_sigma_sq)
+					self.x_reduce_s = self._x2d_2_z_conv_alex(self.x2d_rgb_norm, trainable=FLAGS.if_s_trainable)
+					self.z_mean = self._fcAfter_x2d_2_z_conv_alex(self.x_reduce_s, self.z_size, trainable=FLAGS.if_s_trainable)
 					self.z = self.z_mean
 				else:
 					self.z = self.z0_mean
@@ -284,15 +273,8 @@ class VariationalAutoencoder(object):
 			with tf.variable_scope("recog_p"):
 				self.p_s = self.gen.p_s
 				if FLAGS.if_gndP == False:
-					if FLAGS.if_alex == False:
-						x_reduce_size = 256
-						_, self.x_reduce_p = self._x2d_2_z_conv(self.x2d_rgb_norm, x_reduce_size)
-					else:
-						self.x_reduce_p = self._x2d_2_z_conv_alex(self.x2d_rgb_norm, trainable=FLAGS.if_p_trainable)
-					if FLAGS.if_alex == False:
-						self.p_predict, _ = self._x2d_2_z_conv(self.x_reduce_p, 3)
-					else:
-						self.p_predict = self._fcAfter_x2d_2_z_conv_alex(self.x_reduce_p, 3, trainable=FLAGS.if_p_trainable)
+					self.x_reduce_p = self._x2d_2_z_conv_alex(self.x2d_rgb_norm, trainable=FLAGS.if_p_trainable)
+					self.p_predict = self._fcAfter_x2d_2_z_conv_alex(self.x_reduce_p, 3, trainable=FLAGS.if_p_trainable)
 					def euclidean_norm(tensor, reduction_indicies = 1, name = None):
 						squareroot_tensor = tf.square(tensor)
 						euclidean_norm = tf.reduce_sum(squareroot_tensor, reduction_indices = reduction_indicies, keep_dims = True)
@@ -555,56 +537,6 @@ class VariationalAutoencoder(object):
 		hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, self.flatten_length_2d//4, activation_fn=self.transfer_fct_conv, trainable=trainable)
 		hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, output_size, activation_fn=self.transfer_fct_conv, trainable=trainable)
 		return hidden_tensor
-
-
-	def _x2d_2_z_conv(self, input_tensor, output_size):
-		current_input = input_tensor
-
-		def conv_layer(current_input, kernel_shape, strides, scope, transfer_fct, is_training, if_batch_norm, padding):
-			# kernel = tf.truncated_normal(kernel_shape, dtype=tf.float32, stddev=1e-3)
-			kernel = tf.Variable(
-				tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)))
-			biases = tf.Variable(tf.zeros(shape=[kernel_shape[-1]], dtype=tf.float32), trainable=True)
-			if if_batch_norm:
-				# current_output = self.BatchNorm(
-				# 		transfer_fct(tf.add(tf.nn.conv2d(current_input, kernel, strides, padding), biases)), 
-				# 		is_training=is_training, scope=scope)
-				current_output = transfer_fct(
-					self.BatchNorm(
-						tf.add(tf.nn.conv2d(current_input, kernel, strides, padding), biases),
-						trainable=trainable, scope=scope
-						)
-					)
-			else:
-				current_output = transfer_fct(
-						tf.nn.bias_add(tf.nn.conv2d(current_input, kernel, strides, padding), biases),
-					)
-			return current_output
-		def transfer_fct_none(x):
-			return x
-
-		current_input = conv_layer(current_input, [3, 3, 3, 64], [1, 2, 2, 1], 'BN-2d-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME")
-		print current_input.get_shape().as_list()
-		current_input = conv_layer(current_input, [3, 3, 64, 128], [1, 2, 2, 1], 'BN-2d-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME")
-		print current_input.get_shape().as_list()
-		current_input = conv_layer(current_input, [3, 3, 128, 256], [1, 2, 2, 1], 'BN-2d-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME")
-		print current_input.get_shape().as_list()
-		current_input = conv_layer(current_input, [3, 3, 256, 256], [1, 2, 2, 1], 'BN-2d-3', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME")
-		print current_input.get_shape().as_list()
-
-		self.before_flatten_shape_2d = current_input.get_shape().as_list()
-		self.flatten_shape_2d = tf.pack([-1, np.prod(current_input.get_shape().as_list() [1:])])
-		# current_input = tf.nn.dropout(current_input, 0.8)
-		flattened = tf.reshape(current_input, self.flatten_shape_2d)
-		self.flatten_length_2d = flattened.get_shape().as_list()[1]
-		print '---------- _x2d_2_z_conv: flatten length:', self.flatten_length_2d
-		# hidden_tensor = tf.contrib.layers.fully_connected(flattened, self.flatten_length_2d//4, activation_fn=None)
-		# hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, self.flatten_length_2d//4, activation_fn=None)
-		# hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, output_size, activation_fn=None)
-		hidden_tensor = xavier_fully(flattened, self.flatten_length_2d//4)
-		hidden_tensor = xavier_fully(hidden_tensor, self.flatten_length_2d//4)
-		hidden_tensor = xavier_fully(hidden_tensor, output_size)
-		return (hidden_tensor, flattened)
 
 	def _x_2_z_conv(self, input_tensor, trainable):
 		input_shape=[None, 27000]
