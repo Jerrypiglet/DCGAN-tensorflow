@@ -25,8 +25,7 @@ from tensorflow.python.framework import ops
 import warnings
 
 def read_and_decode_single_example_x0(filename, FLAGS):
-	filename_queue = tf.train.string_input_producer([filename],
-													num_epochs=FLAGS.training_epochs)
+	filename_queue = tf.train.string_input_producer([filename])
 	options = tf.python_io.TFRecordOptions(tf.python_io.TFRecordCompressionType.ZLIB)
 	reader = tf.TFRecordReader(options = options)
 	_, serialized_example = reader.read(filename_queue)
@@ -44,8 +43,7 @@ def read_and_decode_single_example_x(filename, FLAGS):
 	# first construct a queue containing a list of filenames.
 	# this lets a user split up there dataset in multiple files to keep
 	# size down
-	filename_queue = tf.train.string_input_producer([filename],
-													num_epochs=FLAGS.training_epochs)
+	filename_queue = tf.train.string_input_producer([filename])
 	# Unlike the TFRecordWriter, the TFRecordReader is symbolic
 	options = tf.python_io.TFRecordOptions(tf.python_io.TFRecordCompressionType.ZLIB)
 	reader = tf.TFRecordReader(options = options)

@@ -74,9 +74,8 @@ global FLAGS
 FLAGS = flags.FLAGS
 
 class VariationalAutoencoder(object):
-	def __init__(self, params, transfer_fct=tf.nn.sigmoid):
+	def __init__(self, params):
 		self.params = params
-		self.transfer_fct = transfer_fct
 		self.transfer_fct_conv = lrelu
 		# self.batch_normalization = batch_normalization
 		self.learning_rate = params['learning_rate']
