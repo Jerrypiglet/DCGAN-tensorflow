@@ -124,17 +124,17 @@ class VirtualBatchNormalization(object):
 
 		self.half = half
 		shape = x.get_shape().as_list()
-		dyn_batch_size = tf.shape(x)[0]
+		self.dyn_batch_size = tf.shape(x)[0]
 		needs_reshape = len(shape) != 4
 
 		if needs_reshape:
 			orig_shape = shape
 			if len(shape) == 5:
-				x = tf.reshape(x, tf.pack([dyn_batch_size, 1, shape[1]*shape[2]*shape[3], shape[4]]))
+				x = tf.reshape(x, tf.pack([self.dyn_batch_size, 1, shape[1]*shape[2]*shape[3], shape[4]]))
 			elif len(shape) == 2:
-				x = tf.reshape(x, tf.pack([dyn_batch_size, 1, 1, shape[1]]))
+				x = tf.reshape(x, tf.pack([self.dyn_batch_size, 1, 1, shape[1]]))
 			elif len(shape) == 1:
-				x = tf.reshape(x, tf.pack([dyn_batch_size, 1, 1, 1]))
+				x = tf.reshape(x, tf.pack([self.dyn_batch_size, 1, 1, 1]))
 			else:
 				assert False, shape
 			shape = x.get_shape().as_list()
@@ -146,14 +146,14 @@ class VirtualBatchNormalization(object):
 			if self.half is None:
 				half = x
 			elif self.half == 1:
-				half = tf.slice(x, [0, 0, 0, 0], tf.pack([dyn_batch_size // 2, shape[1], shape[2], shape[3]]))
+				half = tf.slice(x, [0, 0, 0, 0], tf.pack([self.dyn_batch_size // 2, shape[1], shape[2], shape[3]]))
 			elif self.half == 2:
-				half = tf.slice(x, tf.pack([dyn_batch_size // 2, 0, 0, 0]), tf.pack([dyn_batch_size // 2, shape[1], shape[2], shape[3]]))
+				half = tf.slice(x, tf.pack([self.dyn_batch_size // 2, 0, 0, 0]), tf.pack([self.dyn_batch_size // 2, shape[1], shape[2], shape[3]]))
 			else:
 				assert False
 			self.mean = tf.reduce_mean(half, [0, 1, 2], keep_dims=True)
 			self.mean_sq = tf.reduce_mean(tf.square(half), [0, 1, 2], keep_dims=True)
-			self.batch_size = dyn_batch_size
+			self.batch_size = self.dyn_batch_size
 			assert x is not None
 			assert self.mean is not None
 			assert self.mean_sq is not None
@@ -165,18 +165,18 @@ class VirtualBatchNormalization(object):
 
 	def __call__(self, x):
 		shape = x.get_shape().as_list()
-		shape[0] = dyn_batch_size
+		shape[0] = self.dyn_batch_size
 		shape = tf.pack(shape)
 		needs_reshape = len(shape) != 4
 
 		if needs_reshape:
 			orig_shape = shape
 			if len(shape) == 5:
-				x = tf.reshape(x, tf.pack([dyn_batch_size, 1, shape[1]*shape[2]*shape[3], shape[4]]))
+				x = tf.reshape(x, tf.pack([self.dyn_batch_size, 1, shape[1]*shape[2]*shape[3], shape[4]]))
 			elif len(shape) == 2:
-				x = tf.reshape(x, tf.pack([dyn_batch_size, 1, 1, shape[1]]))
+				x = tf.reshape(x, tf.pack([self.dyn_batch_size, 1, 1, shape[1]]))
 			elif len(shape) == 1:
-				x = tf.reshape(x, tf.pack([dyn_batch_size, 1, 1, 1]))
+				x = tf.reshape(x, tf.pack([self.dyn_batch_size, 1, 1, 1]))
 			else:
 				assert False, shape
 			shape = x.get_shape().as_list()
