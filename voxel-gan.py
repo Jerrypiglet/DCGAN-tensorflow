@@ -35,7 +35,6 @@ flags.DEFINE_integer("resume_from", -1, "resume from")
 flags.DEFINE_boolean("train_net", True, "train net: True for training net 0, false for training net 1")
 flags.DEFINE_boolean("restore_encoder0", False, "training net 1 and restoring net 0 from saved points")
 flags.DEFINE_integer("n_z", 20, "hidden size")
-flags.DEFINE_boolean("if_conv", False, "if conv")
 flags.DEFINE_integer("batch_size", 200, "batch_size")
 flags.DEFINE_integer("models_in_batch", 40, "models in a batch")
 flags.DEFINE_float("learning_rate", 0.001, "learning rate")
@@ -58,14 +57,12 @@ flags.DEFINE_integer("save_every_step", 1, "save every ? step")
 flags.DEFINE_boolean("if_test", False, "if test")
 flags.DEFINE_integer("test_every_step", 10, "test every ? step")
 flags.DEFINE_string("data_train_net0", "", "load train data from")
-flags.DEFINE_string("data_mean", "", "load mean data from")
 flags.DEFINE_string("data_test_net0", "", "load test data from")
 flags.DEFINE_string("data_train_net1", "", "load train data from")
 flags.DEFINE_string("data_test_net1", "", "load test data from")
 flags.DEFINE_boolean("if_BN", False, "if batch_norm")
 flags.DEFINE_boolean("if_BN_out", False, "if batch_norm for x output layer")
 flags.DEFINE_boolean("if_show", True, "if show mode")
-flags.DEFINE_boolean("if_alex", False, "if use alexnet for regressor")
 flags.DEFINE_boolean("if_unlock_decoder0", False, "if unlock decoder0")
 flags.DEFINE_boolean("if_gndS", False, "if_gndS")
 flags.DEFINE_boolean("if_gndP", True, "if_gndP")
@@ -130,28 +127,6 @@ class VariationalAutoencoder(object):
 
 		self.restorer_encoder0 = tf.train.Saver(slim.get_variables_to_restore(include=["encoder0","decoder0","step"]), max_to_keep=2, write_version=tf.train.SaverDef.V2)
 		self.saver_for_resume = tf.train.Saver(slim.get_variables_to_restore(exclude=["is_training"]), max_to_keep=50, write_version=tf.train.SaverDef.V2)
-
-		# variables_to_restore0 = slim.get_variables_to_restore(include=["encoder0","decoder0","step"], exclude=["Adam"])
-		# variables_to_restore0 = {k.op.name:k for k in variables_to_restore0 if (not("Adam" in k.op.name) and not("is_training" in k.op.name))}
-		# self.restorer_encoder0 = tf.train.Saver(variables_to_restore0, write_version=tf.train.SaverDef.V2)
-
-		# variables_to_restore = tf.all_variables()
-		# variables_to_restore = {k.op.name:k for k in variables_to_restore if (
-		# 	not("decoder0/fully_connected/biases/Adam" in k.op.name) and 
-		# 	not("decoder0/fully_connected/weights/Adam" in k.op.name) and 
-		# 	not("decoder0/fully_connected_1/biases/Adam" in k.op.name) and 
-		# 	not("decoder0/fully_connected_1/weights/Adam" in k.op.name) and 
-		# 	not("decoder0/fully_connected_2/biases/Adam" in k.op.name) and 
-		# 	not("decoder0/fully_connected_2/weights/Adam" in k.op.name) and 
-		# 	not("decoder0/fully_connected_3/biases/Adam" in k.op.name) and 
-		# 	not("decoder0/fully_connected_3/weights/Adam" in k.op.name) and 
-		# 	not("is_training" in k.op.name))}
-		# self.restorer = tf.train.Saver(variables_to_restore, write_version=tf.train.SaverDef.V2)
-
-		# variables_to_restore = slim.get_variables_to_restore(exclude=["RMSProp", "is_training"])
-		# variables_to_restore = {k.op.name:k for k in variables_to_restore if (not("RMSProp" in k.op.name) and not("is_training" in k.op.name))}
-		# self.restorer = tf.train.Saver(variables_to_restore, max_to_keep=50, write_version=tf.train.SaverDef.V2)
-
 		self.restorer = tf.train.Saver(slim.get_variables_to_restore(exclude=["is_training"]), max_to_keep=50, write_version=tf.train.SaverDef.V2)
 
 		config = tf.ConfigProto(
@@ -196,17 +171,6 @@ class VariationalAutoencoder(object):
 					lambda: tf.assign_add(self.global_step, 1), lambda: tf.assign_add(self.global_step, 0))
 			self.gen = ModelReader_Rotator_tw(FLAGS)
 
-		def x_2_s(x, output_size):
-			fc_layer6 = slim.fully_connected(x, 1000, activation_fn=self.transfer_fct_conv)
-			fc_layer7 = slim.fully_connected(fc_layer6, 500, activation_fn=self.transfer_fct_conv)
-			fc_layer8 = slim.fully_connected(fc_layer7, output_size, activation_fn=self.transfer_fct_conv)
-			return fc_layer8
-		def s_2_x(s):
-			fc_layer10 = slim.fully_connected(s, 100, activation_fn=self.transfer_fct_conv)
-			fc_layer11 = slim.fully_connected(fc_layer10, 500, activation_fn=self.transfer_fct_conv)
-			fc_layer12 = slim.fully_connected(fc_layer11, 1000, activation_fn=self.transfer_fct_conv)
-			return fc_layer12
-
 		with tf.device('/gpu:0'):
 			## Define net 0
 			self.x0 = tf.cond(self.train_net, lambda: self.gen.x0_batch, lambda: self.gen.x_gnd_batch) # aligned models
@@ -215,22 +179,7 @@ class VariationalAutoencoder(object):
 			self.dyn_batch_size_x0 = tf.shape(self.x0)[0]
 			with tf.variable_scope("encoder0"):
 				with slim.arg_scope([slim.fully_connected], trainable=FLAGS.train_net):
-					# if FLAGS.if_conv == False:
-					# 	self.x0_reduce = slim.fully_connected(x_2_s(self.x0_flatten, 100), self.z_size, activation_fn=self.transfer_fct_conv, trainable=FLAGS.train_net)
-					# else:
-					# 	self.x0_reduce = slim.fully_connected(
-					# 		self._x_2_z_conv(self.x0_flatten, 100, trainable=FLAGS.train_net), 
-					# 		self.z_size, activation_fn=self.transfer_fct_conv, trainable=FLAGS.train_net)
-					# self.z0_mean = slim.fully_connected(self.x0_reduce, self.z_size, activation_fn=None, trainable=FLAGS.train_net)
-					# self.z0_mean = tf.clip_by_value(self.z0_mean, -10., 10.)
-					# self.z0_log_sigma_sq = slim.fully_connected(self.x0_reduce, self.z_size, activation_fn=self.transfer_fct_conv, trainable=FLAGS.train_net)
-					# self.z0_log_sigma_sq = tf.clip_by_value(self.z0_log_sigma_sq, -10., 10.)
-					# eps0 = tf.random_normal(tf.pack([self.dyn_batch_size_x0, self.z_size]))
-					# self.z0 = self.z0_mean + eps0 * tf.sqrt(tf.exp(self.z0_log_sigma_sq))
-					if FLAGS.if_conv == False:
-						self.x0_reduce = slim.fully_connected(x_2_s(self.x0_flatten, 100), self.z_size, activation_fn=self.transfer_fct_conv, trainable=FLAGS.train_net)
-					else:
-						self.x0_reduce = self._x_2_z_conv(self.x0_flatten, trainable=FLAGS.train_net)
+					self.x0_reduce = self._x_2_z_conv(self.x0_flatten, trainable=FLAGS.train_net)
 					self.z0_mean = self._fcAfter_x_2_z_conv(self.x0_reduce, self.z_size, trainable=FLAGS.train_net)
 					self.z0_mean = tf.clip_by_value(self.z0_mean, -50., 50.)
 					self.z0_log_sigma_sq = self._fcAfter_x_2_z_conv(self.x0_reduce, self.z_size, trainable=FLAGS.train_net)
@@ -268,7 +217,6 @@ class VariationalAutoencoder(object):
 				else:
 					self.z = self.z0_mean
 					self.z_mean = self.z0_mean
-					# self.z_log_sigma_sq = self.z0_log_sigma_sq
 		with tf.device('/gpu:1'):
 			with tf.variable_scope("recog_p"):
 				self.p_s = self.gen.p_s
@@ -291,12 +239,7 @@ class VariationalAutoencoder(object):
 			z0_for_recon = tf.cond(self.train_net, lambda: self.z0, lambda: self.z)
 			with tf.variable_scope("decoder0"):
 				with slim.arg_scope([slim.fully_connected], trainable=(FLAGS.train_net or FLAGS.if_unlock_decoder0)):
-					if FLAGS.if_conv == False:
-						self.x0_recon_flatten = slim.fully_connected(s_2_x(z0_for_recon), 27000, activation_fn=tf.sigmoid, trainable=(FLAGS.train_net or FLAGS.if_unlock_decoder0))
-						self.x0_recon = tf.reshape(self.x0_recon_flatten, [-1, 30, 30, 30, 1])
-					else:
-						self.x0_recon = self._z_2_x_conv(z0_for_recon, trainable=(FLAGS.train_net or FLAGS.if_unlock_decoder0))
-						# self.x0_recon_flatten = tf.reshape(self.x0_recon, [-1, 27000])
+					self.x0_recon = self._z_2_x_conv(z0_for_recon, trainable=(FLAGS.train_net or FLAGS.if_unlock_decoder0))	
 
 		## Define decoder1
 		with tf.device('/gpu:3'):
@@ -1063,10 +1006,9 @@ if FLAGS.resume_from == -1 and FLAGS.if_show == False:
 	raw_input("Press Enter to continue...")
 	os.system('rm -rf %s/ %s/' % (params["summary_folder"], params["model_folder"]))
 
-if FLAGS.if_alex == True:
-	global alexnet_data
-	alexnet_data = np.load("./alexnet/bvlc_alexnet.npy").item()
-	print '===== Alexnet loaded.'
+global alexnet_data
+alexnet_data = np.load("./alexnet/bvlc_alexnet.npy").item()
+print '===== Alexnet loaded.'
 vae = VariationalAutoencoder(params)
 
 global net_folder
