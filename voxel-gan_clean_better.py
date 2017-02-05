@@ -91,7 +91,6 @@ def lrelu(x, leak=0.2, name="lrelu"):
 		return f1 * x + f2 * abs(x)
 
 class BatchNormalization(object):
-
 	def __init__(self, shape, name, decay=0.9, epsilon=1e-5):
 		with tf.variable_scope(name):
 			self.beta = tf.Variable(tf.constant(0.0, shape=shape), name="beta") # offset
@@ -372,6 +371,22 @@ class VariationalAutoencoder(object):
 			print '########### BN trainable!!!'
 		return tflearn.layers.normalization.batch_normalization(inputT, trainable=trainable)
 
+	class batch_norm(object):
+		def __init__(self, epsilon=1e-5, momentum = 0.9, name="batch_norm"):
+			with tf.variable_scope(name):
+				self.epsilon  = epsilon
+				self.momentum = momentum
+				self.name = name
+
+		def __call__(self, x, train=True):
+			return tf.contrib.layers.batch_norm(x,
+					decay=self.momentum, 
+					updates_collections=None,
+					epsilon=self.epsilon,
+					scale=True,
+					is_training=train,
+					scope=self.name)
+
 	def _discriminator(self, input_tensor, trainable=True, reuse=False):
 		with tf.variable_scope("discriminator") as scope:
 			if reuse:
@@ -394,10 +409,11 @@ class VariationalAutoencoder(object):
 
 					if if_batch_norm:
 						print scope
-						bn_func = BatchNormalization([kernel_shape[4]], scope)
+						# bn_func = BatchNormalization([kernel_shape[4]], scope)
+						bn_func = batch_norm(scope)
 						current_output = transfer_fct(
 							bn_func(
-								tf.add(conv3d(current_input, kernel), biases), is_training
+								tf.add(conv3d(current_input, kernel), biases)
 								)
 							)
 					else:
@@ -439,8 +455,8 @@ class VariationalAutoencoder(object):
 				f = tf.reduce_sum(tf.exp(-abs_dif), 2) + bias_md
 
 				h = tf.concat(1, [h, f])
-		        y = tf.matmul(h, kernel_h5) + bias_h5
-		        return y
+				y = tf.matmul(h, kernel_h5) + bias_h5
+				return y
 
 				# hidden_tensor = tf.contrib.layers.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable)
 				# hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable)
