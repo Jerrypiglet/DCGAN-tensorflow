@@ -385,7 +385,7 @@ class VariationalAutoencoder(object):
 					# 	trainable=trainable)
 					# biases = tf.Variable(tf.zeros(shape=[kernel_shape[-1]], dtype=tf.float32), trainable=trainable)
 					kernel = weight_variable(kernel_shape)
-					biases = bias_variable([kernel_shape[-2]])
+					biases = bias_variable([kernel_shape[-1]])
 
 					if if_batch_norm:
 						bn_func = BatchNormalization([kernel_shape[4]], scope)
@@ -476,11 +476,11 @@ class VariationalAutoencoder(object):
 				return current_output
 			def transfer_fct_none(x):
 				return x
-			current_input = deconv_layer(current_input, [4, 4, 4, 128, 256], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 4, 4, 4, 256]), 'BN-deconv-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+			current_input = deconv_layer(current_input, [4, 4, 4, 128, 256], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 4, 4, 4, 128]), 'BN-deconv-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
-			current_input = deconv_layer(current_input, [4, 4, 4, 64, 128], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 8, 8, 8, 128]), 'BN-deconv-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding ="SAME", trainable=trainable)
+			current_input = deconv_layer(current_input, [4, 4, 4, 64, 128], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 8, 8, 8, 64]), 'BN-deconv-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding ="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
-			current_input = deconv_layer(current_input, [4, 4, 4, 32, 64], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 15, 15, 15, 64]), 'BN-deconv-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+			current_input = deconv_layer(current_input, [4, 4, 4, 32, 64], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 15, 15, 15, 32]), 'BN-deconv-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
 			current_input = deconv_layer(current_input, [4, 4, 4, 1, 32], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 30, 30, 30, 1]), 'BN-deconv-3', transfer_fct_none, is_training=self.is_training, if_batch_norm=False, padding="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
