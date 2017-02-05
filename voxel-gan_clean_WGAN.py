@@ -223,8 +223,6 @@ class VariationalAutoencoder(object):
 		with tf.variable_scope("discriminator") as scope:
 			if reuse:
 				scope.reuse_variables()
-
-			with slim.arg_scope([slim.fully_connected], trainable=FLAGS.train_net):
 				input_shape=[None, 27000]
 
 				x_tensor = tf.reshape(input_tensor, [-1, 30, 30, 30, 1])
@@ -235,7 +233,7 @@ class VariationalAutoencoder(object):
 					# kernel = tf.Variable(
 					# 	tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
 					# 	trainable=trainable)
-					kernel = tf.Variable(tf.random_normal(kernel_shape, stddev=0.02))
+					kernel = tf.Variable(tf.random_normal(kernel_shape, stddev=0.02), trainable=trainable)
 					biases = tf.Variable(tf.zeros(shape=[kernel_shape[-1]], dtype=tf.float32), trainable=trainable)
 					if if_batch_norm:
 						current_output = transfer_fct(
