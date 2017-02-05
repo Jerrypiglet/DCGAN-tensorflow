@@ -206,14 +206,7 @@ class VariationalAutoencoder(object):
 		with tf.control_dependencies([self.opt_c]):
 			self.opt_c = tf.tuple(clipped_var_c)
 
-		# self.d_optim = tf.train.AdamOptimizer(1e-5, beta1=FLAGS.beta1) \
-		# 					.minimize(self.d_loss, var_list=self.d_vars)
-		# self.g_optim = tf.train.AdamOptimizer(0.00002, beta1=FLAGS.beta1) \
-		# 					.minimize(self.g_loss, var_list=self.g_vars)
-
-		self.g_sum = tf.merge_summary([self.z_sum, self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
-		self.d_sum = tf.merge_summary(
-				[self.z_sum, self.G_sum, self.d_loss_real_sum, self.d_loss_sum])
+		self.merged_summary = tf.merge_summary([self.g_loss_sum, self.d_loss_sum, self.z_sum, self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
 
 	def BatchNorm(self, inputT, trainable, scope=None):
 		if trainable:
@@ -234,7 +227,7 @@ class VariationalAutoencoder(object):
 				def conv_layer(current_input, kernel_shape, strides, scope, transfer_fct, is_training, if_batch_norm, padding, trainable):
 					# kernel = tf.truncated_normal(kernel_shape, dtype=tf.float32, stddev=1e-3)
 					kernel = tf.Variable(
-						tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 20), 1.0 / (math.sqrt(kernel_shape[3]) + 20)), 
+						tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
 						trainable=trainable)
 					biases = tf.Variable(tf.zeros(shape=[kernel_shape[-1]], dtype=tf.float32), trainable=trainable)
 					if if_batch_norm:
@@ -252,13 +245,13 @@ class VariationalAutoencoder(object):
 				def transfer_fct_none(x):
 					return x
 
-				current_input = conv_layer(current_input, [4, 4, 4, 1, 64], [1, 2, 2, 2, 1], 'BN-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+				current_input = conv_layer(current_input, [4, 4, 4, 1, 32], [1, 2, 2, 2, 1], 'BN-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 				print current_input.get_shape().as_list()
-				current_input = conv_layer(current_input, [4, 4, 4, 64, 128], [1, 2, 2, 2, 1], 'BN-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+				current_input = conv_layer(current_input, [4, 4, 4, 32, 64], [1, 2, 2, 2, 1], 'BN-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 				print current_input.get_shape().as_list()
-				current_input = conv_layer(current_input, [4, 4, 4, 128, 256], [1, 2, 2, 2, 1], 'BN-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+				current_input = conv_layer(current_input, [4, 4, 4, 64, 128], [1, 2, 2, 2, 1], 'BN-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 				print current_input.get_shape().as_list()
-				current_input = conv_layer(current_input, [4, 4, 4, 256, 512], [1, 2, 2, 2, 1], 'BN-3', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+				current_input = conv_layer(current_input, [4, 4, 4, 128, 256], [1, 2, 2, 2, 1], 'BN-3', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 				print current_input.get_shape().as_list()
 				# current_input = conv_layer(current_input, [4, 4, 4, 512, 1], [1, 1, 1, 1, 1], 'BN-4', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 				# print current_input.get_shape().as_list()
@@ -281,13 +274,13 @@ class VariationalAutoencoder(object):
 			hidden_tensor_inv = tf.contrib.layers.fully_connected(hidden_tensor_inv, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable)
 			hidden_tensor_inv = tf.contrib.layers.fully_connected(hidden_tensor_inv, self.flatten_length, activation_fn=self.transfer_fct_conv, trainable=trainable)
 
-			current_input = tf.reshape(hidden_tensor_inv, [-1, 2, 2, 2, 512])
+			current_input = tf.reshape(hidden_tensor_inv, [-1, 2, 2, 2, 256])
 			print 'current_input', current_input.get_shape().as_list()
 
 			def deconv_layer(current_input, kernel_shape, strides, output_shape, scope, transfer_fct, is_training, if_batch_norm, padding, trainable):
 				# kernel = tf.truncated_normal(kernel_shape, dtype=tf.float32, stddev=1e-1)
 				kernel = tf.Variable(
-					tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 20), 1.0 / (math.sqrt(kernel_shape[3]) + 20)), 
+					tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
 					trainable=trainable)
 				biases = tf.Variable(tf.zeros(shape=[kernel_shape[-2]], dtype=tf.float32), trainable=trainable)
 				if if_batch_norm:
@@ -309,13 +302,13 @@ class VariationalAutoencoder(object):
 				return current_output
 			def transfer_fct_none(x):
 				return x
-			current_input = deconv_layer(current_input, [4, 4, 4, 256, 512], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 4, 4, 4, 256]), 'BN-deconv-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+			current_input = deconv_layer(current_input, [4, 4, 4, 128, 256], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 4, 4, 4, 128]), 'BN-deconv-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
-			current_input = deconv_layer(current_input, [4, 4, 4, 128, 256], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 8, 8, 8, 128]), 'BN-deconv-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding ="SAME", trainable=trainable)
+			current_input = deconv_layer(current_input, [4, 4, 4, 64, 128], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 8, 8, 8, 64]), 'BN-deconv-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding ="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
-			current_input = deconv_layer(current_input, [4, 4, 4, 64, 128], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 15, 15, 15, 64]), 'BN-deconv-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+			current_input = deconv_layer(current_input, [4, 4, 4, 32, 64], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 15, 15, 15, 32]), 'BN-deconv-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
-			current_input = deconv_layer(current_input, [4, 4, 4, 1, 64], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 30, 30, 30, 1]), 'BN-deconv-3', transfer_fct_none, is_training=self.is_training, if_batch_norm=False, padding="SAME", trainable=trainable)
+			current_input = deconv_layer(current_input, [4, 4, 4, 1, 32], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 30, 30, 30, 1]), 'BN-deconv-3', transfer_fct_none, is_training=self.is_training, if_batch_norm=False, padding="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
 			print '---------- _<<< generator: flatten length:', self.flatten_length
 			return (tf.nn.sigmoid(current_input), current_input)
@@ -468,11 +461,8 @@ def train(gan):
 	prepare_for_training(gan)
 	# sample_z = np.random.uniform(-1, 1, size=(gan.batch_size, gan.z_size))
 	i = 0
-	merged_all = tf.summary.merge_all()
 	try:
 		while not gan.coord.should_stop():
-			start_time = time.time()
-
 			def next_feed_dict():
 				batch_z = np.random.normal(0., 1., [gan.batch_size, gan.z_size]) \
 								.astype(np.float32)
@@ -499,16 +489,17 @@ def train(gan):
 			# 	feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
 
 			def write_to_screen():
+				start_time = time.time()
 				feed_dict = next_feed_dict()
 				G, d_loss, g_loss, step = gan.sess.run([gan.G, gan.d_loss, gan.g_loss, gan.global_step], feed_dict=feed_dict)
-				
+
 				epoch_show = math.floor(float(step) * FLAGS.models_in_batch / float(num_samples))
 				batch_show = math.floor(step - epoch_show * (num_samples / FLAGS.models_in_batch))
 
 				if FLAGS.if_summary:
 					gan.train_writer.flush()
 					if FLAGS.train_net:
-						print "STEP", '%03d' % (step), "Epo", '%03d' % (epoch_show), "ba", '%03d' % (batch_show), \
+						print "i", '%03d' % (i), "STEP", '%03d' % (step), "Epo", '%03d' % (epoch_show), "ba", '%03d' % (batch_show), \
 						"d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)
 
 				if FLAGS.if_save and step != 0 and step % FLAGS.save_every_step == 0:
@@ -540,7 +531,7 @@ def train(gan):
 					run_options = tf.RunOptions(
 						trace_level=tf.RunOptions.FULL_TRACE)
 					run_metadata = tf.RunMetadata()
-					_, merged = gan.sess.run([gan.opt_c, merged_all], feed_dict=feed_dict,
+					_, merged = gan.sess.run([gan.opt_c, tf.merged_summary], feed_dict=feed_dict,
 										 options=run_options, run_metadata=run_metadata)
 					gan.train_writer.add_summary(merged, i)
 					gan.train_writer.add_run_metadata(
@@ -550,7 +541,7 @@ def train(gan):
 				write_to_screen()                
 			feed_dict = next_feed_dict()
 			if i % 100 == 99:
-				_, merged = sess.run([gan.opt_g, merged_all], feed_dict=feed_dict,
+				_, merged = sess.run([gan.opt_g, tf.merged_summary], feed_dict=feed_dict,
 					 options=run_options, run_metadata=run_metadata)
 				gan.train_writer.add_summary(merged, i)
 				gan.train_writer.add_run_metadata(
