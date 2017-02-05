@@ -393,6 +393,7 @@ class VariationalAutoencoder(object):
 					biases = bias_variable([kernel_shape[-1]])
 
 					if if_batch_norm:
+						print scope
 						bn_func = BatchNormalization([kernel_shape[4]], scope)
 						current_output = transfer_fct(
 							bn_func(
