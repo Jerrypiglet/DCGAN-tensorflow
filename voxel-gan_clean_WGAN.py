@@ -7,6 +7,7 @@ import tflearn
 from sklearn.manifold import TSNE
 from tsne import bh_sne
 import tensorflow.contrib.slim as slim
+import tensorflow.contrib.layers as ly
 from tensorflow.contrib.layers import batch_norm
 import scipy
 import scipy.io as sio
@@ -166,7 +167,7 @@ class VariationalAutoencoder(object):
 			self.D_logits_)
 		self.g_loss = tf.reduce_mean(
 			- self.D_logits_)
-		
+
 		self.d_loss_real_sum = tf.scalar_summary("d_loss_real", self.d_loss_real)
 		self.d_loss_fake_sum = tf.scalar_summary("d_loss_fake", self.d_loss_fake)
 													
