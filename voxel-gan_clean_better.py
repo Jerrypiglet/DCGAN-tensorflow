@@ -90,6 +90,22 @@ def lrelu(x, leak=0.2, name="lrelu"):
 		f2 = 0.5 * (1 - leak)
 		return f1 * x + f2 * abs(x)
 
+class batch_norm(object):
+		def __init__(self, epsilon=1e-5, momentum = 0.9, name="batch_norm"):
+			with tf.variable_scope(name):
+				self.epsilon  = epsilon
+				self.momentum = momentum
+				self.name = name
+
+		def __call__(self, x, train=True):
+			return tf.contrib.layers.batch_norm(x,
+					decay=self.momentum, 
+					updates_collections=None,
+					epsilon=self.epsilon,
+					scale=True,
+					is_training=train,
+					scope=self.name)
+
 class BatchNormalization(object):
 	def __init__(self, shape, name, decay=0.9, epsilon=1e-5):
 		with tf.variable_scope(name):
@@ -370,22 +386,6 @@ class VariationalAutoencoder(object):
 		if trainable:
 			print '########### BN trainable!!!'
 		return tflearn.layers.normalization.batch_normalization(inputT, trainable=trainable)
-
-	class batch_norm(object):
-		def __init__(self, epsilon=1e-5, momentum = 0.9, name="batch_norm"):
-			with tf.variable_scope(name):
-				self.epsilon  = epsilon
-				self.momentum = momentum
-				self.name = name
-
-		def __call__(self, x, train=True):
-			return tf.contrib.layers.batch_norm(x,
-					decay=self.momentum, 
-					updates_collections=None,
-					epsilon=self.epsilon,
-					scale=True,
-					is_training=train,
-					scope=self.name)
 
 	def _discriminator(self, input_tensor, trainable=True, reuse=False):
 		with tf.variable_scope("discriminator") as scope:
