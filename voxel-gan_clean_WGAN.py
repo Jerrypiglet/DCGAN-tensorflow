@@ -161,7 +161,7 @@ class VariationalAutoencoder(object):
 			self.z = tf.placeholder(tf.float32, [None, self.z_size], name='z')
 			self.z_sum = tf.histogram_summary("z", self.z)
 
-			self.flatten_length = 2048
+			# self.flatten_length = 2048
 
 			self.D_logits = self._discriminator(self.x0)
 			self.G, self.G_noGate = self._generator(self.z)
@@ -266,10 +266,10 @@ class VariationalAutoencoder(object):
 			# current_input = conv_layer(current_input, [4, 4, 4, 512, 1], [1, 1, 1, 1, 1], 'BN-4', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 			# print current_input.get_shape().as_list()
 
-			# self.before_flatten_shape = current_input.get_shape().as_list()
-			# self.flatten_shape = tf.pack([-1, np.prod(current_input.get_shape().as_list() [1:])])
+			self.before_flatten_shape = current_input.get_shape().as_list()
+			self.flatten_shape = tf.pack([-1, np.prod(current_input.get_shape().as_list() [1:])])
 			flattened = tf.reshape(current_input, self.flatten_shape)
-			# self.flatten_length = flattened.get_shape().as_list()[1]
+			self.flatten_length = flattened.get_shape().as_list()[1]
 
 			print '---------- _>>> discriminator: flatten length:', self.flatten_length
 			hidden_tensor = tf.contrib.layers.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm)
