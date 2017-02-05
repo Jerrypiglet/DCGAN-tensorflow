@@ -391,7 +391,7 @@ class VariationalAutoencoder(object):
 						bn_func = BatchNormalization([kernel_shape[4]], scope)
 						current_output = transfer_fct(
 							bn_func(
-								tf.add(conv3d(current_input, kernel), biases),
+								tf.add(conv3d(current_input, kernel), biases), is_training
 								)
 							)
 					else:
