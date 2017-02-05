@@ -237,9 +237,9 @@ class VariationalAutoencoder(object):
 			current_input = x_tensor
 
 			def conv_layer(current_input, kernel_shape, strides, scope, transfer_fct, is_training, if_batch_norm, padding, trainable, reuse=False):
-				with tf.variable_scope("d_weights") as scope:
+				with tf.variable_scope("d_weights") as scope_weights:
 					if reuse:
-						scope.reuse_variables()
+						scope_weights.reuse_variables()
 					# kernel = tf.truncated_normal(kernel_shape, dtype=tf.float32, stddev=1e-3)
 					# kernel = tf.Variable(
 					# 	tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
