@@ -410,10 +410,10 @@ class VariationalAutoencoder(object):
 					if if_batch_norm:
 						print scope
 						# bn_func = BatchNormalization([kernel_shape[4]], scope)
-						bn_func = batch_norm(name=scope)
+						# bn_func = batch_norm(name=scope)
 						current_output = transfer_fct(
-							bn_func(
-								tf.add(conv3d(current_input, kernel), biases)
+							BatchNorm(
+								tf.add(conv3d(current_input, kernel), biases), trainable=True
 								)
 							)
 					else:
