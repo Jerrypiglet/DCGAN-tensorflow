@@ -112,8 +112,8 @@ class VariationalAutoencoder(object):
 
 		if FLAGS.train_net:
 			summary_folder = params['summary_folder'] + '/net0'
-		else:
-			summary_folder = params['summary_folder'] + '/net1'
+		# else:
+		# 	summary_folder = params['summary_folder'] + '/net1'
 		self.train_writer = tf.train.SummaryWriter(summary_folder)
 		self.global_step = tf.Variable(-1, name='global_step', trainable=False)
 
@@ -187,52 +187,52 @@ class VariationalAutoencoder(object):
 					eps0 = tf.random_normal(tf.pack([self.dyn_batch_size_x0, self.z_size]))
 					self.z0 = self.z0_mean + eps0 * tf.sqrt(tf.exp(self.z0_log_sigma_sq))
 
-		## Define encoder1 --recog p&s
-		with tf.device('/gpu:1'):
-			self.x2d_rgb = self.gen.x2d_rgb_batch # batch_size
-			self.x2d_rgb_mean = tf.placeholder(tf.float32, [227, 227, 3])
-			# self.x2d_rgb_norm = tf.sub(self.x2d_rgb, self.x2d_rgb_mean)
-			self.x2d_rgb_norm = tf.sub(tf.div(self.x2d_rgb, 255.), 0.5)
-			# self.x2d_rgb_norm = tf.div(self.x2d_rgb_norm, 127.5)
+		# ## Define encoder1 --recog p&s
+		# with tf.device('/gpu:1'):
+		# 	self.x2d_rgb = self.gen.x2d_rgb_batch # batch_size
+		# 	self.x2d_rgb_mean = tf.placeholder(tf.float32, [227, 227, 3])
+		# 	# self.x2d_rgb_norm = tf.sub(self.x2d_rgb, self.x2d_rgb_mean)
+		# 	self.x2d_rgb_norm = tf.sub(tf.div(self.x2d_rgb, 255.), 0.5)
+		# 	# self.x2d_rgb_norm = tf.div(self.x2d_rgb_norm, 127.5)
 
-		## GND X
-		with tf.device('/gpu:3'):
-			self.x = self.gen.x_batch
-			self.x = tf.transpose(self.x, perm=[0, 2, 3, 1, 4])
-			self.x2d_gnd = self.gen.x2d_gnd_batch # batch_size
-			self.x2d_gnd = tf.reverse(self.x2d_gnd, [False, True, False])
+		# ## GND X
+		# with tf.device('/gpu:3'):
+		# 	self.x = self.gen.x_batch
+		# 	self.x = tf.transpose(self.x, perm=[0, 2, 3, 1, 4])
+		# 	self.x2d_gnd = self.gen.x2d_gnd_batch # batch_size
+		# 	self.x2d_gnd = tf.reverse(self.x2d_gnd, [False, True, False])
 				
-			## X with GND p
-			self.x3d_gnd_rot = tf.reshape(tf.clip_by_value(self.gen._transform(self.x0, self.gen.R_s_flat, self.gen.out_size), 0., 1.), [-1, 30, 30, 30, 1])
-			self.x2d_gnd_proj = self._proj(self.x3d_gnd_rot)
+		# 	## X with GND p
+		# 	self.x3d_gnd_rot = tf.reshape(tf.clip_by_value(self.gen._transform(self.x0, self.gen.R_s_flat, self.gen.out_size), 0., 1.), [-1, 30, 30, 30, 1])
+		# 	self.x2d_gnd_proj = self._proj(self.x3d_gnd_rot)
 			
-			self.dyn_batch_size_x = tf.shape(self.x)[0]
-			self.x_flatten = tf.reshape(self.x, [-1, 27000])
-		with tf.device('/gpu:1'):
-			with tf.variable_scope("recog_s"):
-				if FLAGS.if_gndS == False:
-					self.x_reduce_s = self._x2d_2_z_conv_alex(self.x2d_rgb_norm, trainable=FLAGS.if_s_trainable)
-					self.z_mean = self._fcAfter_x2d_2_z_conv_alex(self.x_reduce_s, self.z_size, trainable=FLAGS.if_s_trainable)
-					self.z = self.z_mean
-				else:
-					self.z = self.z0_mean
-					self.z_mean = self.z0_mean
-		with tf.device('/gpu:1'):
-			with tf.variable_scope("recog_p"):
-				self.p_s = self.gen.p_s
-				if FLAGS.if_gndP == False:
-					self.x_reduce_p = self._x2d_2_z_conv_alex(self.x2d_rgb_norm, trainable=FLAGS.if_p_trainable)
-					self.p_predict = self._fcAfter_x2d_2_z_conv_alex(self.x_reduce_p, 3, trainable=FLAGS.if_p_trainable)
-					def euclidean_norm(tensor, reduction_indicies = 1, name = None):
-						squareroot_tensor = tf.square(tensor)
-						euclidean_norm = tf.reduce_sum(squareroot_tensor, reduction_indices = reduction_indicies, keep_dims = True)
-						return tf.sqrt(euclidean_norm)
-					self.p_l2norm = euclidean_norm(self.p_predict, reduction_indicies = 1) + 1e-10
-					self.p_s_l2norm = euclidean_norm(self.p_s, reduction_indicies = 1) + 1e-10
-					self.p_unit = tf.div(self.p_predict, self.p_l2norm)
-					self.p_predict = np.pi * tf.mul(tf.nn.tanh(self.p_l2norm), self.p_unit)
-				else:
-					self.p_predict = self.p_s
+		# 	self.dyn_batch_size_x = tf.shape(self.x)[0]
+		# 	self.x_flatten = tf.reshape(self.x, [-1, 27000])
+		# with tf.device('/gpu:1'):
+		# 	with tf.variable_scope("recog_s"):
+		# 		if FLAGS.if_gndS == False:
+		# 			self.x_reduce_s = self._x2d_2_z_conv_alex(self.x2d_rgb_norm, trainable=FLAGS.if_s_trainable)
+		# 			self.z_mean = self._fcAfter_x2d_2_z_conv_alex(self.x_reduce_s, self.z_size, trainable=FLAGS.if_s_trainable)
+		# 			self.z = self.z_mean
+		# 		else:
+		# 			self.z = self.z0_mean
+		# 			self.z_mean = self.z0_mean
+		# with tf.device('/gpu:1'):
+		# 	with tf.variable_scope("recog_p"):
+		# 		self.p_s = self.gen.p_s
+		# 		if FLAGS.if_gndP == False:
+		# 			self.x_reduce_p = self._x2d_2_z_conv_alex(self.x2d_rgb_norm, trainable=FLAGS.if_p_trainable)
+		# 			self.p_predict = self._fcAfter_x2d_2_z_conv_alex(self.x_reduce_p, 3, trainable=FLAGS.if_p_trainable)
+		# 			def euclidean_norm(tensor, reduction_indicies = 1, name = None):
+		# 				squareroot_tensor = tf.square(tensor)
+		# 				euclidean_norm = tf.reduce_sum(squareroot_tensor, reduction_indices = reduction_indicies, keep_dims = True)
+		# 				return tf.sqrt(euclidean_norm)
+		# 			self.p_l2norm = euclidean_norm(self.p_predict, reduction_indicies = 1) + 1e-10
+		# 			self.p_s_l2norm = euclidean_norm(self.p_s, reduction_indicies = 1) + 1e-10
+		# 			self.p_unit = tf.div(self.p_predict, self.p_l2norm)
+		# 			self.p_predict = np.pi * tf.mul(tf.nn.tanh(self.p_l2norm), self.p_unit)
+		# 		else:
+		# 			self.p_predict = self.p_s
 
 		## Define decoder0
 		with tf.device('/gpu:2'):
@@ -241,30 +241,30 @@ class VariationalAutoencoder(object):
 				with slim.arg_scope([slim.fully_connected], trainable=(FLAGS.train_net or FLAGS.if_unlock_decoder0)):
 					self.x0_recon = self._z_2_x_conv(z0_for_recon, trainable=(FLAGS.train_net or FLAGS.if_unlock_decoder0))	
 
-		## Define decoder1
-		with tf.device('/gpu:3'):
-			with tf.variable_scope("decoder1"):
-				# self.Rs_flat_pred = self.gen._tws_to_Rs_flat(self.p_s)
-				# self.Rs_flat_pred = self.gen._tws_to_Rs_flat(tf.cond(self.is_training, lambda:self.p_s, lambda: self.p_predict))
-				self.Rs_flat_pred = self.gen._tws_to_Rs_flat(self.p_predict)
-				self.x_recon = tf.reshape(tf.clip_by_value(self.gen._transform(self.x0_recon, self.Rs_flat_pred, self.gen.out_size), 0., 1.), [-1, 30, 30, 30, 1])
-				self.x_recon_flatten = tf.reshape(self.x_recon, [-1, 27000])
-				self.x_proj = self._proj(self.x_recon)
+		# ## Define decoder1
+		# with tf.device('/gpu:3'):
+		# 	with tf.variable_scope("decoder1"):
+		# 		# self.Rs_flat_pred = self.gen._tws_to_Rs_flat(self.p_s)
+		# 		# self.Rs_flat_pred = self.gen._tws_to_Rs_flat(tf.cond(self.is_training, lambda:self.p_s, lambda: self.p_predict))
+		# 		self.Rs_flat_pred = self.gen._tws_to_Rs_flat(self.p_predict)
+		# 		self.x_recon = tf.reshape(tf.clip_by_value(self.gen._transform(self.x0_recon, self.Rs_flat_pred, self.gen.out_size), 0., 1.), [-1, 30, 30, 30, 1])
+		# 		self.x_recon_flatten = tf.reshape(self.x_recon, [-1, 27000])
+		# 		self.x_proj = self._proj(self.x_recon)
 
-	def _flatten_to_25d(self, X):
-		def _do_with_single(X_3d_single):
-			X_3d_single_sum = tf.scan(lambda a, x: a + x, X_3d_single, initializer=tf.zeros(tf.pack([30, 30, 1])))
-			X_3d_single_25d = tf.select(\
-				tf.logical_and(tf.greater(X_3d_single_sum, tf.constant(0.)), tf.less(X_3d_single_sum, tf.constant(1.5))), \
-				X_3d_single, tf.to_float(tf.zeros_like(X_3d_single)))
-			return X_3d_single_25d
-		return tf.map_fn(_do_with_single, X)
+	# def _flatten_to_25d(self, X):
+	# 	def _do_with_single(X_3d_single):
+	# 		X_3d_single_sum = tf.scan(lambda a, x: a + x, X_3d_single, initializer=tf.zeros(tf.pack([30, 30, 1])))
+	# 		X_3d_single_25d = tf.select(\
+	# 			tf.logical_and(tf.greater(X_3d_single_sum, tf.constant(0.)), tf.less(X_3d_single_sum, tf.constant(1.5))), \
+	# 			X_3d_single, tf.to_float(tf.zeros_like(X_3d_single)))
+	# 		return X_3d_single_25d
+	# 	return tf.map_fn(_do_with_single, X)
 	
-	def _proj(self, X):
-		X = tf.transpose(X, perm=[0, 3, 1, 2, 4])
-		X25 = self._flatten_to_25d(X)
-		return tf.reduce_max(self._flatten_to_25d(X25), 1)
-		# return self._flatten_to_25d(X)
+	# def _proj(self, X):
+	# 	X = tf.transpose(X, perm=[0, 3, 1, 2, 4])
+	# 	X25 = self._flatten_to_25d(X)
+	# 	return tf.reduce_max(self._flatten_to_25d(X25), 1)
+	# 	# return self._flatten_to_25d(X)
 
 	def _create_loss_optimizer(self):
 		with tf.device('/gpu:3'):
@@ -277,50 +277,50 @@ class VariationalAutoencoder(object):
 			self.latent_loss0 = tf.reduce_mean(tf.reduce_sum(0.5 * (tf.square(self.z0_mean) + tf.exp(self.z0_log_sigma_sq) -
 									self.z0_log_sigma_sq- 1.0), 1))
 
-		with tf.device('/gpu:1'):
-			self.euc_loss_s = tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(self.z_mean - self.z0_mean), 1)), 0)
-			self.euc_loss_p = tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(self.p_s - self.p_predict), 1)), 0) \
-				# + 10 * tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(self.p_l2norm - self.p_s_l2norm), 1)), 0)
-		with tf.device('/gpu:3'):
-			# self.recon_loss_x = tf.reduce_mean(tf.reduce_sum(-self.x_flatten * tf.log(self.x_recon_flatten + epsilon) -
-			# 				 (1.0 - self.x_flatten) * tf.log(1.0 - self.x_recon_flatten + epsilon), 1))
-			# self.x_flatten = (self.x_flatten * 3.) - 1.
-			# self.x_recon_flatten = (self.x_recon_flatten * 0.9) + 0.1
-			self.recon_loss_x_1 = tf.reduce_mean(tf.reduce_sum(- self.x_flatten * tf.log(self.x_recon_flatten + epsilon), 1))
-			self.recon_loss_x_2 = tf.reduce_mean(tf.reduce_sum(- (1.0 - self.x_flatten) * tf.log(1.0 - self.x_recon_flatten + epsilon), 1))
-			self.recon_loss_x_reweight = 0.97 * self.recon_loss_x_1 + 0.03 * self.recon_loss_x_2
-			self.recon_loss_x = self.recon_loss_x_1 + self.recon_loss_x_2
-			# self.recon_loss_x = self.recon_loss_x_reweight
+		# with tf.device('/gpu:1'):
+		# 	self.euc_loss_s = tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(self.z_mean - self.z0_mean), 1)), 0)
+		# 	self.euc_loss_p = tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(self.p_s - self.p_predict), 1)), 0) \
+		# 		# + 10 * tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(self.p_l2norm - self.p_s_l2norm), 1)), 0)
+		# with tf.device('/gpu:3'):
+		# 	# self.recon_loss_x = tf.reduce_mean(tf.reduce_sum(-self.x_flatten * tf.log(self.x_recon_flatten + epsilon) -
+		# 	# 				 (1.0 - self.x_flatten) * tf.log(1.0 - self.x_recon_flatten + epsilon), 1))
+		# 	# self.x_flatten = (self.x_flatten * 3.) - 1.
+		# 	# self.x_recon_flatten = (self.x_recon_flatten * 0.9) + 0.1
+		# 	self.recon_loss_x_1 = tf.reduce_mean(tf.reduce_sum(- self.x_flatten * tf.log(self.x_recon_flatten + epsilon), 1))
+		# 	self.recon_loss_x_2 = tf.reduce_mean(tf.reduce_sum(- (1.0 - self.x_flatten) * tf.log(1.0 - self.x_recon_flatten + epsilon), 1))
+		# 	self.recon_loss_x_reweight = 0.97 * self.recon_loss_x_1 + 0.03 * self.recon_loss_x_2
+		# 	self.recon_loss_x = self.recon_loss_x_1 + self.recon_loss_x_2
+		# 	# self.recon_loss_x = self.recon_loss_x_reweight
 
-			x2d_gnd_flatten = tf.reshape(self.x2d_gnd, [-1, 30*30])
-			x_proj_flatten = tf.reshape(self.x_proj, [-1, 30*30])
-			self.reproj_loss_1 = tf.reduce_mean(tf.reduce_sum(- x2d_gnd_flatten * tf.log(x_proj_flatten + epsilon), 1))
-			self.reproj_loss_2 = tf.reduce_mean(tf.reduce_sum(- (1.0 - x2d_gnd_flatten) * tf.log(1.0 - x_proj_flatten + epsilon),1))
-			self.reproj_loss_reweight = 0.03 * self.reproj_loss_1 + 0.97 * self.reproj_loss_2
-			self.reproj_loss = self.reproj_loss_1 + self.reproj_loss_2
-			ones_2d = tf.ones_like(x_proj_flatten, dtype=tf.int8)
-			zeros_2d = tf.zeros_like(x_proj_flatten, dtype=tf.int8)
-			x2d_gnd_flatten_int = tf.cast(x2d_gnd_flatten, tf.int8)
-			x_proj_flatten_int = tf.cast(tf.select(x_proj_flatten > 0.5, ones_2d, zeros_2d), tf.int8)
-			GndP = tf.equal(x2d_gnd_flatten_int, ones_2d)
-			GndN = tf.equal(x2d_gnd_flatten_int, zeros_2d)
-			PredP = tf.equal(x_proj_flatten_int, ones_2d)
-			PredN = tf.equal(x_proj_flatten_int, zeros_2d)
-			# https://www.wikiwand.com/en/Precision_and_recall
-			TP = tf.reduce_sum(tf.cast(tf.logical_and(GndP, PredP), tf.float32))
-			TN = tf.reduce_sum(tf.cast(tf.logical_and(GndN, PredN), tf.float32))
-			FP = tf.reduce_sum(tf.cast(tf.logical_and(GndN, PredP), tf.float32))
-			FN = tf.reduce_sum(tf.cast(tf.logical_and(GndP, PredN), tf.float32))
-			self.accuracy = tf.div((TP + TN), (TP + TN + FP + FN))
-			self.precision = tf.div(TP, (TP + FP))
-			self.recall = tf.div(TP, (TP + FN))
+		# 	x2d_gnd_flatten = tf.reshape(self.x2d_gnd, [-1, 30*30])
+		# 	x_proj_flatten = tf.reshape(self.x_proj, [-1, 30*30])
+		# 	self.reproj_loss_1 = tf.reduce_mean(tf.reduce_sum(- x2d_gnd_flatten * tf.log(x_proj_flatten + epsilon), 1))
+		# 	self.reproj_loss_2 = tf.reduce_mean(tf.reduce_sum(- (1.0 - x2d_gnd_flatten) * tf.log(1.0 - x_proj_flatten + epsilon),1))
+		# 	self.reproj_loss_reweight = 0.03 * self.reproj_loss_1 + 0.97 * self.reproj_loss_2
+		# 	self.reproj_loss = self.reproj_loss_1 + self.reproj_loss_2
+		# 	ones_2d = tf.ones_like(x_proj_flatten, dtype=tf.int8)
+		# 	zeros_2d = tf.zeros_like(x_proj_flatten, dtype=tf.int8)
+		# 	x2d_gnd_flatten_int = tf.cast(x2d_gnd_flatten, tf.int8)
+		# 	x_proj_flatten_int = tf.cast(tf.select(x_proj_flatten > 0.5, ones_2d, zeros_2d), tf.int8)
+		# 	GndP = tf.equal(x2d_gnd_flatten_int, ones_2d)
+		# 	GndN = tf.equal(x2d_gnd_flatten_int, zeros_2d)
+		# 	PredP = tf.equal(x_proj_flatten_int, ones_2d)
+		# 	PredN = tf.equal(x_proj_flatten_int, zeros_2d)
+		# 	# https://www.wikiwand.com/en/Precision_and_recall
+		# 	TP = tf.reduce_sum(tf.cast(tf.logical_and(GndP, PredP), tf.float32))
+		# 	TN = tf.reduce_sum(tf.cast(tf.logical_and(GndN, PredN), tf.float32))
+		# 	FP = tf.reduce_sum(tf.cast(tf.logical_and(GndN, PredP), tf.float32))
+		# 	FN = tf.reduce_sum(tf.cast(tf.logical_and(GndP, PredN), tf.float32))
+		# 	self.accuracy = tf.div((TP + TN), (TP + TN + FP + FN))
+		# 	self.precision = tf.div(TP, (TP + FP))
+		# 	self.recall = tf.div(TP, (TP + FN))
 
-			if FLAGS.train_net:
-					self.cost = FLAGS.reweight_recon * self.recon_loss0 + FLAGS.reweight_vae * self.latent_loss0
-			else:
-					self.cost = FLAGS.reweight_euc_s * self.euc_loss_s + FLAGS.reweight_euc_p * self.euc_loss_p \
-						+ FLAGS.reweight_recon * self.recon_loss_x\
-						+ FLAGS.reweight_reproj * self.reproj_loss
+			# if FLAGS.train_net:
+			self.cost = FLAGS.reweight_recon * self.recon_loss0 + FLAGS.reweight_vae * self.latent_loss0
+			# else:
+			# 	self.cost = FLAGS.reweight_euc_s * self.euc_loss_s + FLAGS.reweight_euc_p * self.euc_loss_p \
+			# 		+ FLAGS.reweight_recon * self.recon_loss_x\
+			# 		+ FLAGS.reweight_reproj * self.reproj_loss
 			self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.cost, colocate_gradients_with_ops=True)
 			# self.optimizer_def = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
 			# gvs = self.optimizer_def.compute_gradients(self.cost, colocate_gradients_with_ops=True)
@@ -337,40 +337,40 @@ class VariationalAutoencoder(object):
 			summary_loss_latent0 = tf.scalar_summary('loss0/vae_loss', self.latent_loss0)
 			summaries0 = [summary_loss0, summary_loss_recon0, summary_loss_latent0]
 			self.merged_summaries0 = tf.merge_summary(summaries0)
-			summary_loss = tf.scalar_summary('loss/loss', self.cost)
-			summary_loss_recon = tf.scalar_summary('loss/rec_loss', self.recon_loss_x / self.x_size)
-			summary_loss_recon_reweight = tf.scalar_summary('loss/rec_loss_reweight', self.recon_loss_x_reweight / self.x_size)
-			summary_loss_recon_1 = tf.scalar_summary('loss/rec_loss_1', self.recon_loss_x_1 / self.x_size)
-			summary_loss_recon_2 = tf.scalar_summary('loss/rec_loss_2', self.recon_loss_x_2 / self.x_size)
-			summary_loss_reproj = tf.scalar_summary('loss/reproj_loss', self.reproj_loss / 900.)
-			summary_loss_reproj_reweight = tf.scalar_summary('loss/reproj_loss_reweight', self.reproj_loss_reweight / 900.)
-			summary_loss_reproj_1 = tf.scalar_summary('loss/reproj_loss_1', self.reproj_loss_1 / 900.)
-			summary_loss_reproj_2 = tf.scalar_summary('loss/reproj_loss_2', self.reproj_loss_2 / 900.)
-			summary_accuracy = tf.scalar_summary('loss/accuracy', self.accuracy)
-			summary_precision = tf.scalar_summary('loss/precision', self.precision)
-			summary_recall = tf.scalar_summary('loss/recall', self.recall)
-			summary_loss_euc_s = tf.scalar_summary('loss/euc_loss_s', self.euc_loss_s)
-			summary_loss_euc_p = tf.scalar_summary('loss/euc_loss_p', self.euc_loss_p)
-			summaries = [summary_loss, summary_loss_recon, summary_loss_recon_reweight, summary_loss_recon_1, summary_loss_recon_2, \
-				summary_loss_reproj, summary_loss_reproj_reweight, summary_loss_reproj_1, summary_loss_reproj_2, summary_loss_euc_s, summary_loss_euc_p, \
-				summary_accuracy, summary_precision, summary_recall]
-			self.merged_summaries = tf.merge_summary(summaries)
+			# summary_loss = tf.scalar_summary('loss/loss', self.cost)
+			# summary_loss_recon = tf.scalar_summary('loss/rec_loss', self.recon_loss_x / self.x_size)
+			# summary_loss_recon_reweight = tf.scalar_summary('loss/rec_loss_reweight', self.recon_loss_x_reweight / self.x_size)
+			# summary_loss_recon_1 = tf.scalar_summary('loss/rec_loss_1', self.recon_loss_x_1 / self.x_size)
+			# summary_loss_recon_2 = tf.scalar_summary('loss/rec_loss_2', self.recon_loss_x_2 / self.x_size)
+			# summary_loss_reproj = tf.scalar_summary('loss/reproj_loss', self.reproj_loss / 900.)
+			# summary_loss_reproj_reweight = tf.scalar_summary('loss/reproj_loss_reweight', self.reproj_loss_reweight / 900.)
+			# summary_loss_reproj_1 = tf.scalar_summary('loss/reproj_loss_1', self.reproj_loss_1 / 900.)
+			# summary_loss_reproj_2 = tf.scalar_summary('loss/reproj_loss_2', self.reproj_loss_2 / 900.)
+			# summary_accuracy = tf.scalar_summary('loss/accuracy', self.accuracy)
+			# summary_precision = tf.scalar_summary('loss/precision', self.precision)
+			# summary_recall = tf.scalar_summary('loss/recall', self.recall)
+			# summary_loss_euc_s = tf.scalar_summary('loss/euc_loss_s', self.euc_loss_s)
+			# summary_loss_euc_p = tf.scalar_summary('loss/euc_loss_p', self.euc_loss_p)
+			# summaries = [summary_loss, summary_loss_recon, summary_loss_recon_reweight, summary_loss_recon_1, summary_loss_recon_2, \
+			# 	summary_loss_reproj, summary_loss_reproj_reweight, summary_loss_reproj_1, summary_loss_reproj_2, summary_loss_euc_s, summary_loss_euc_p, \
+			# 	summary_accuracy, summary_precision, summary_recall]
+			# self.merged_summaries = tf.merge_summary(summaries)
 			summary_loss0_test = tf.scalar_summary('loss0_test/loss', self.cost)
 			summary_loss0_recon_test = tf.scalar_summary('loss0_test/rec_loss', self.recon_loss0 / self.x_size)
 			summary_loss0_latent_test = tf.scalar_summary('loss0_test/vae_loss', self.latent_loss0)
 			summaries0_test = [summary_loss0_test, summary_loss0_recon_test, summary_loss0_latent_test]
 			self.merged_summaries0_test = tf.merge_summary(summaries0_test)
-			summary_loss_test = tf.scalar_summary('loss_test/loss', self.cost)
-			summary_loss_recon_test = tf.scalar_summary('loss_test/rec_loss', self.recon_loss_x / self.x_size)
-			summary_loss_reproj_test = tf.scalar_summary('loss_test/reproj_loss', self.reproj_loss / 900.)
-			summary_accuracy_test = tf.scalar_summary('loss_test/accuracy', self.accuracy)
-			summary_precision_test = tf.scalar_summary('loss_test/precision', self.precision)
-			summary_recall_test = tf.scalar_summary('loss_test/recall', self.recall)
-			summary_loss_euc_s_test = tf.scalar_summary('loss_test/euc_loss_s', self.euc_loss_s)
-			summary_loss_euc_p_test = tf.scalar_summary('loss_test/euc_loss_p', self.euc_loss_p)
-			summaries_test = [summary_loss_test, summary_loss_recon_test, summary_loss_reproj_test, summary_loss_euc_s_test, summary_loss_euc_p_test, \
-				summary_accuracy_test, summary_precision_test, summary_recall_test]
-			self.merged_summaries_test = tf.merge_summary(summaries_test)
+			# summary_loss_test = tf.scalar_summary('loss_test/loss', self.cost)
+			# summary_loss_recon_test = tf.scalar_summary('loss_test/rec_loss', self.recon_loss_x / self.x_size)
+			# summary_loss_reproj_test = tf.scalar_summary('loss_test/reproj_loss', self.reproj_loss / 900.)
+			# summary_accuracy_test = tf.scalar_summary('loss_test/accuracy', self.accuracy)
+			# summary_precision_test = tf.scalar_summary('loss_test/precision', self.precision)
+			# summary_recall_test = tf.scalar_summary('loss_test/recall', self.recall)
+			# summary_loss_euc_s_test = tf.scalar_summary('loss_test/euc_loss_s', self.euc_loss_s)
+			# summary_loss_euc_p_test = tf.scalar_summary('loss_test/euc_loss_p', self.euc_loss_p)
+			# summaries_test = [summary_loss_test, summary_loss_recon_test, summary_loss_reproj_test, summary_loss_euc_s_test, summary_loss_euc_p_test, \
+			# 	summary_accuracy_test, summary_precision_test, summary_recall_test]
+			# self.merged_summaries_test = tf.merge_summary(summaries_test)
 
 	def BatchNorm(self, inputT, trainable, scope=None):
 		# Note: is_training is tf.placeholder(tf.bool) type
@@ -605,34 +605,34 @@ class VariationalAutoencoder(object):
 			feed_dict={self.is_training: False, self.gen.is_training: False, self.is_queue: True, self.train_net: True})
 		return (cost, cost_recon, cost_vae, merged, x, x_recon, x_idx, z_mean, z_log_sigma_sq, z, steps)
 
-	def _train_align(self, is_training):
-		_, cost, cost_recon, cost_reproj, cost_euc_s, cost_euc_p, merged, \
-		x, x_recon, x_proj, x_idx, x2d_rgb, x2d_gnd, z_mean, z0, z0_mean, \
-		p_s, p_predict, p_l2norm, p_unit, steps, is_training = self.sess.run(
-			(self.optimizer, self.cost, self.recon_loss_x, self.reproj_loss, self.euc_loss_s, self.euc_loss_p, self.merged_summaries, \
-				self.x, self.x_recon, self.x_proj, self.gen.x_batch_idx, self.x2d_rgb_norm, self.x2d_gnd, self.z_mean, self.z0, self.z0_mean, 
-				self.gen.p_s, self.p_predict, self.p_l2norm, self.p_unit, self.global_step, self.is_training), \
-			feed_dict={self.is_training: True, self.gen.is_training: True, self.is_queue: True, self.train_net: False})
-		print p_s[:5, :]
-		print p_predict[:5, :]
-		print p_l2norm[:5, :]
-		print p_unit[:5, :]
-		print np.amax(np.absolute(p_predict))
-		return (cost, cost_recon, cost_reproj, cost_euc_s, cost_euc_p, merged, \
-			x, x_recon, x_proj, x_idx, x2d_rgb, x2d_gnd, z_mean, z0, z0_mean, \
-			p_s, p_predict, steps)
+	# def _train_align(self, is_training):
+	# 	_, cost, cost_recon, cost_reproj, cost_euc_s, cost_euc_p, merged, \
+	# 	x, x_recon, x_proj, x_idx, x2d_rgb, x2d_gnd, z_mean, z0, z0_mean, \
+	# 	p_s, p_predict, p_l2norm, p_unit, steps, is_training = self.sess.run(
+	# 		(self.optimizer, self.cost, self.recon_loss_x, self.reproj_loss, self.euc_loss_s, self.euc_loss_p, self.merged_summaries, \
+	# 			self.x, self.x_recon, self.x_proj, self.gen.x_batch_idx, self.x2d_rgb_norm, self.x2d_gnd, self.z_mean, self.z0, self.z0_mean, 
+	# 			self.gen.p_s, self.p_predict, self.p_l2norm, self.p_unit, self.global_step, self.is_training), \
+	# 		feed_dict={self.is_training: True, self.gen.is_training: True, self.is_queue: True, self.train_net: False})
+	# 	print p_s[:5, :]
+	# 	print p_predict[:5, :]
+	# 	print p_l2norm[:5, :]
+	# 	print p_unit[:5, :]
+	# 	print np.amax(np.absolute(p_predict))
+	# 	return (cost, cost_recon, cost_reproj, cost_euc_s, cost_euc_p, merged, \
+	# 		x, x_recon, x_proj, x_idx, x2d_rgb, x2d_gnd, z_mean, z0, z0_mean, \
+	# 		p_s, p_predict, steps)
 
-	def _test_align(self, is_training):
-		cost, cost_recon, cost_reproj, cost_euc_s, cost_euc_p, merged, \
-		x, x_recon, x_proj, x_idx, x2d_rgb, x2d_gnd, z_mean, z0, z0_mean, \
-		p_s, p_predict, steps, is_training = self.sess.run(
-			(self.cost, self.recon_loss_x, self.reproj_loss, self.euc_loss_s, self.euc_loss_p, self.merged_summaries_test, \
-				self.x, self.x_recon, self.x_proj, self.gen.x_batch_idx, self.x2d_rgb_norm, self.x2d_gnd, self.z_mean, self.z0, self.z0_mean, 
-				self.gen.p_s, self.p_predict, self.global_step, self.is_training), \
-			feed_dict={self.is_training: False, self.gen.is_training: False, self.is_queue: True, self.train_net: False})
-		return (cost, cost_recon, cost_reproj, cost_euc_s, cost_euc_p, merged, \
-			x, x_recon, x_proj, x_idx, x2d_rgb, x2d_gnd, z_mean, z0, z0_mean, \
-			p_s, p_predict, steps)
+	# def _test_align(self, is_training):
+	# 	cost, cost_recon, cost_reproj, cost_euc_s, cost_euc_p, merged, \
+	# 	x, x_recon, x_proj, x_idx, x2d_rgb, x2d_gnd, z_mean, z0, z0_mean, \
+	# 	p_s, p_predict, steps, is_training = self.sess.run(
+	# 		(self.cost, self.recon_loss_x, self.reproj_loss, self.euc_loss_s, self.euc_loss_p, self.merged_summaries_test, \
+	# 			self.x, self.x_recon, self.x_proj, self.gen.x_batch_idx, self.x2d_rgb_norm, self.x2d_gnd, self.z_mean, self.z0, self.z0_mean, 
+	# 			self.gen.p_s, self.p_predict, self.global_step, self.is_training), \
+	# 		feed_dict={self.is_training: False, self.gen.is_training: False, self.is_queue: True, self.train_net: False})
+	# 	return (cost, cost_recon, cost_reproj, cost_euc_s, cost_euc_p, merged, \
+	# 		x, x_recon, x_proj, x_idx, x2d_rgb, x2d_gnd, z_mean, z0, z0_mean, \
+	# 		p_s, p_predict, steps)
 
 def draw_sample(fig, data, ms, colormap='rainbow', camera_view=False, p=None):
 	# data = np.reshape(data, (30, 30, 30))
@@ -755,33 +755,27 @@ def prepare_for_training(vae):
 			count = count + 1
 		if FLAGS.train_net:
 			print("++++++++++ Total training samples: %d; %d batches in an epoch." % (count, int(count/FLAGS.models_in_batch)))
-		else:
-			print("++++++++++ Total training samples: %d; %d batches in an epoch." % (count, int(count/FLAGS.batch_size)))
+		# else:
+		# 	print("++++++++++ Total training samples: %d; %d batches in an epoch." % (count, int(count/FLAGS.batch_size)))
 		return count
 	global num_samples
 	global num_samples_test
 	print '+++++ counting samples...'
-	# if FLAGS.train_net:
-		# num_samples = _count_train_set(FLAGS.data_train_net0)
-		# num_samples_test = _count_train_set(FLAGS.data_test_net0)
+	if FLAGS.train_net:
+		num_samples = _count_train_set(FLAGS.data_train_net0)
+		num_samples_test = _count_train_set(FLAGS.data_test_net0)
 	# else:
 	# num_samples = _count_train_set(FLAGS.data_train_net1)
 	# num_samples_test = _count_train_set(FLAGS.data_test_net1)
-	# num_samples = 313870 # airplane
-	# num_samples_test = 78630
-	# num_samples = 313870 # car
-	# num_samples_test = 145021
-	num_samples = 541773 # chair
-	num_samples_test = 136027
 
 	if FLAGS.if_disp:
 		global pltfig_z0
 		pltfig_z0 = plt.figure(3, figsize=(20, 8))
 		plt.show(block=False)
-		if FLAGS.train_net == False:
-			global pltfig_p0
-			pltfig_p0 = plt.figure(4, figsize=(20, 8))
-			plt.show(block=False)
+		# if FLAGS.train_net == False:
+		# 	global pltfig_p0
+		# 	pltfig_p0 = plt.figure(4, figsize=(20, 8))
+		# 	plt.show(block=False)
 	global tsne_model
 	tsne_model = TSNE(n_components=2, random_state=0, init='pca')
 	# global gen_per_model
@@ -798,11 +792,11 @@ def train(vae):
 				cost, cost_recon, cost_vae, merged, x, x_recon, x_idx, z0_mean, z0_log_sigma_sq, z0, step = vae._train_align0(is_training=True)
 				epoch_show = math.floor(float(step) * FLAGS.models_in_batch / float(num_samples))
 				batch_show = math.floor(step - epoch_show * (num_samples / FLAGS.models_in_batch))
-			else:
-				cost, cost_recon, cost_reproj, cost_euc_s, cost_euc_p, merged, x, x_recon, x_proj, x_idx, x2d_rgb, x2d_gnd, z_mean, z0, z0_mean, \
-				p_s, p_predict, step = vae._train_align(is_training=True)
-				epoch_show = math.floor(float(step) * FLAGS.batch_size / float(num_samples))
-				batch_show = math.floor(step - epoch_show * (num_samples / FLAGS.batch_size))
+			# else:
+			# 	cost, cost_recon, cost_reproj, cost_euc_s, cost_euc_p, merged, x, x_recon, x_proj, x_idx, x2d_rgb, x2d_gnd, z_mean, z0, z0_mean, \
+			# 	p_s, p_predict, step = vae._train_align(is_training=True)
+			# 	epoch_show = math.floor(float(step) * FLAGS.batch_size / float(num_samples))
+			# 	batch_show = math.floor(step - epoch_show * (num_samples / FLAGS.batch_size))
 
 			## print z_mean, z0_mean, p, p_predict
 			# print x_recon
@@ -841,19 +835,19 @@ def train(vae):
 				# pltfig_z0.canvas.draw()
 				# pltfig_z0.savefig(params['summary_folder']+'/%d-pltfig_z.png'%step)
 
-				if FLAGS.train_net == False:
-					print '----- Drawing latent space of p from training batch...'
-					plt.figure(4)
-					plt.clf()
-					ax_p0 = plt.subplot(121, projection='3d')
-					ax_p0.scatter(p_s[:, 0], p_s[:, 1], p_s[:, 2], lw=0)
-					ax_p0.set_title('ground truth pose', fontsize=14, fontweight='bold')
+				# if FLAGS.train_net == False:
+				# 	print '----- Drawing latent space of p from training batch...'
+				# 	plt.figure(4)
+				# 	plt.clf()
+				# 	ax_p0 = plt.subplot(121, projection='3d')
+				# 	ax_p0.scatter(p_s[:, 0], p_s[:, 1], p_s[:, 2], lw=0)
+				# 	ax_p0.set_title('ground truth pose', fontsize=14, fontweight='bold')
 
-					ax_p = plt.subplot(122, projection='3d')
-					ax_p.scatter(p_predict[:, 0], p_predict[:, 1], p_predict[:, 2], lw=0)
-					ax_p.set_title('estimated pose', fontsize=14, fontweight='bold')
-					pltfig_p0.canvas.draw()
-					pltfig_p0.savefig(params['summary_folder']+'/%d-pltfig_p.png'%step)
+				# 	ax_p = plt.subplot(122, projection='3d')
+				# 	ax_p.scatter(p_predict[:, 0], p_predict[:, 1], p_predict[:, 2], lw=0)
+				# 	ax_p.set_title('estimated pose', fontsize=14, fontweight='bold')
+				# 	pltfig_p0.canvas.draw()
+				# 	pltfig_p0.savefig(params['summary_folder']+'/%d-pltfig_p.png'%step)
 
 
 			if FLAGS.if_summary:
@@ -864,11 +858,11 @@ def train(vae):
 					"cost =", "%.4f = %.4f + %.4f" % (\
 						cost, cost_recon * FLAGS.reweight_recon, cost_vae * FLAGS.reweight_vae), \
 					"-- recon = %.4f, vae = %.4f" % (cost_recon / vae.x_size, cost_vae)
-				else:
-					print "STEP", '%03d' % (step), "Epo", '%03d' % (epoch_show), "ba", '%03d' % (batch_show), \
-					"cost =", "%.4f = %.4f + %.4f + %.4f + %.4f" % (\
-						cost, cost_recon * FLAGS.reweight_recon, cost_reproj * FLAGS.reweight_reproj, cost_euc_s * FLAGS.reweight_euc_s, cost_euc_p * FLAGS.reweight_euc_p), \
-					"-- recon = %.4f, reproj = %.4f, euc_s = %.4f, euc_p = %.4f" % (cost_recon / vae.x_size, cost_reproj / 900., cost_euc_s, cost_euc_p)
+				# else:
+				# 	print "STEP", '%03d' % (step), "Epo", '%03d' % (epoch_show), "ba", '%03d' % (batch_show), \
+				# 	"cost =", "%.4f = %.4f + %.4f + %.4f + %.4f" % (\
+				# 		cost, cost_recon * FLAGS.reweight_recon, cost_reproj * FLAGS.reweight_reproj, cost_euc_s * FLAGS.reweight_euc_s, cost_euc_p * FLAGS.reweight_euc_p), \
+				# 	"-- recon = %.4f, reproj = %.4f, euc_s = %.4f, euc_p = %.4f" % (cost_recon / vae.x_size, cost_reproj / 900., cost_euc_s, cost_euc_p)
 
 			if FLAGS.if_save and step != 0 and step % FLAGS.save_every_step == 0:
 				save_vae(vae, step, epoch_show, batch_show)
@@ -876,10 +870,10 @@ def train(vae):
 			if FLAGS.if_test and step % FLAGS.test_every_step == 0 and step != 0:
 				if FLAGS.train_net:
 					cost, cost_recon, cost_vae, merged, x, x_recon, x_idx, z_mean, z_log_sigma_sq, z, step = vae._test_align0(is_training=False)
-				else:
-					cost, cost_recon, cost_reproj, cost_euc_s, cost_euc_p, merged, \
-					x, x_recon, x_proj, x_idx, x2d_rgb, x2d_gnd, z_mean, z0, z0_mean, \
-					p_s, p_predict, step = vae._test_align(is_training=False)
+				# else:
+				# 	cost, cost_recon, cost_reproj, cost_euc_s, cost_euc_p, merged, \
+				# 	x, x_recon, x_proj, x_idx, x2d_rgb, x2d_gnd, z_mean, z0, z0_mean, \
+				# 	p_s, p_predict, step = vae._test_align(is_training=False)
 				if FLAGS.if_summary:
 					vae.train_writer.add_summary(merged, step)
 					vae.train_writer.flush()
@@ -888,11 +882,11 @@ def train(vae):
 						"cost =", "%.4f = %.4f + %.4f" % (\
 							cost, cost_recon * FLAGS.reweight_recon, cost_vae * FLAGS.reweight_vae), \
 						"-- recon = %.4f, vae = %.4f" % (cost_recon / vae.x_size, cost_vae)
-					else:
-						print "TESTING net 1... "\
-						"cost =", "%.4f = %.4f + %.4f + %.4f + %.4f" % (\
-							cost, cost_recon * FLAGS.reweight_recon, cost_reproj * FLAGS.reweight_reproj, cost_euc_s * FLAGS.reweight_euc_s, cost_euc_p * FLAGS.reweight_euc_p), \
-						"-- recon = %.4f, reproj = %.4f, euc_s = %.4f, euc_p = %.4f" % (cost_recon / vae.x_size, cost_reproj / 900., cost_euc_s, cost_euc_p)
+					# else:
+					# 	print "TESTING net 1... "\
+					# 	"cost =", "%.4f = %.4f + %.4f + %.4f + %.4f" % (\
+					# 		cost, cost_recon * FLAGS.reweight_recon, cost_reproj * FLAGS.reweight_reproj, cost_euc_s * FLAGS.reweight_euc_s, cost_euc_p * FLAGS.reweight_euc_p), \
+					# 	"-- recon = %.4f, reproj = %.4f, euc_s = %.4f, euc_p = %.4f" % (cost_recon / vae.x_size, cost_reproj / 900., cost_euc_s, cost_euc_p)
 				if FLAGS.if_draw and step % FLAGS.draw_every == 0:
 					print 'Drawing reconstructed sample from testing batch...'
 					plt.figure(1)
@@ -955,8 +949,8 @@ def train(vae):
 def save_vae(vae, step, epoch, batch):
 	if FLAGS.train_net:
 		net_folder = vae.params['model_folder'] + '/net0'
-	else:
-		net_folder = vae.params['model_folder'] + '/net1'
+	# else:
+	# 	net_folder = vae.params['model_folder'] + '/net1'
 	save_path = vae.saver_for_resume.save(vae.sess, \
 		net_folder + '/%s-step%d-epoch%d-batch%d.ckpt' % (params['save_name'], step, epoch, batch), \
 		global_step=step)
@@ -1014,8 +1008,8 @@ vae = VariationalAutoencoder(params)
 global net_folder
 if FLAGS.train_net:
 	net_folder = vae.params['model_folder'] + '/net0'
-else:
-	net_folder = vae.params['model_folder'] + '/net1'
+# else:
+# 	net_folder = vae.params['model_folder'] + '/net1'
 if FLAGS.resume_from == 1 and FLAGS.folder_name_restore_from == "":
 	print "+++++ Setting restore folder name to the saving folder name..."
 	params["model_folder_restore"] = net_folder
@@ -1292,5 +1286,5 @@ else:
 	print("-----> Starting Showing")
 	if FLAGS.train_net:
 		show_0(vae)
-	else:
-		show_1(vae)	
+	# else:
+	# 	show_1(vae)	
