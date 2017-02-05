@@ -160,12 +160,13 @@ class VirtualBatchNormalization(object):
 			out = self._normalize(x, self.mean, self.mean_sq, "reference")
 			if needs_reshape:
 				print orig_shape
-				out = tf.reshape(out, tf.pack(orig_shape))
+				out = tf.reshape(out, orig_shape)
 			self.reference_output = out
 
 	def __call__(self, x):
 		shape = x.get_shape().as_list()
-		shape[0] = tf.pack(dyn_batch_size)
+		shape[0] = dyn_batch_size
+		shape = tf.pack(shape)
 		needs_reshape = len(shape) != 4
 
 		if needs_reshape:
