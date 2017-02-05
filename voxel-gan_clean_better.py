@@ -337,9 +337,9 @@ class VariationalAutoencoder(object):
 		label_real[:, 0] = 1
 		label_fake[:, 1] = 1
 
-		self.g_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_, tf.constant(label_real)))
-		self.d_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_, tf.constant(label_fake)))
-		self.d_loss += tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y, tf.constant(label_real)))
+		self.g_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(self.y_, tf.constant(label_real)))
+		self.d_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(self.y_, tf.constant(label_fake)))
+		self.d_loss += tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(self.y, tf.constant(label_real)))
 
 		# self.d_loss_real_sum = tf.scalar_summary("d_loss_real", self.d_loss_real)
 		# self.d_loss_fake_sum = tf.scalar_summary("d_loss_fake", self.d_loss_fake)
