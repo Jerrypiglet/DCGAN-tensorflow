@@ -501,67 +501,58 @@ def train(gan):
 			if i < 25 or i % 500 == 0:
 				citers = 100
 			else:
-				citers = self.Citers
+				citers = gan.Citers
 			for j in range(citers):
 				feed_dict = next_feed_dict()
 				if i % 100 == 99 and j == 0:
 					run_options = tf.RunOptions(
 						trace_level=tf.RunOptions.FULL_TRACE)
 					run_metadata = tf.RunMetadata()
-					_, merged = sess.run([self.opt_c, merged_all], feed_dict=feed_dict,
+					_, merged = gan.sess.run([gan.opt_c, merged_all], feed_dict=feed_dict,
 										 options=run_options, run_metadata=run_metadata)
 					gan.train_writer.add_summary(merged, i)
 					gan.train_writer.add_run_metadata(
 						run_metadata, 'critic_metadata {}'.format(i), i)
 				else:
-					sess.run(self.opt_c, feed_dict=feed_dict)                
+					gan.sess.run(gan.opt_c, feed_dict=feed_dict)                
 			feed_dict = next_feed_dict()
 			if i % 100 == 99:
-				_, merged = sess.run([self.opt_g, merged_all], feed_dict=feed_dict,
+				_, merged = sess.run([gan.opt_g, merged_all], feed_dict=feed_dict,
 					 options=run_options, run_metadata=run_metadata)
 				gan.train_writer.add_summary(merged, i)
 				gan.train_writer.add_run_metadata(
 					run_metadata, 'generator_metadata {}'.format(i), i)
 			else:
-				sess.run(self.opt_g, feed_dict=feed_dict)
+				gan.sess.run(gan.opt_g, feed_dict=feed_dict)
+
+			feed_dict = next_feed_dict()
+			G, d_loss, g_loss = gan.sess.run([gan.G, gan.d_loss, gan.g_loss], feed_dict=feed_dict)
 
 			step = i
 			epoch_show = math.floor(float(step) * FLAGS.models_in_batch / float(num_samples))
 			batch_show = math.floor(step - epoch_show * (num_samples / FLAGS.models_in_batch))
 
 			if FLAGS.if_summary:
-				# gan.train_writer.add_summary(summary_str_1, step)
-				# gan.train_writer.add_summary(summary_str_2, step)
-				# gan.train_writer.add_summary(summary_str_3, step)
 				gan.train_writer.flush()
 				if FLAGS.train_net:
 					print "STEP", '%03d' % (step), "Epo", '%03d' % (epoch_show), "ba", '%03d' % (batch_show), \
-					"accu: %.4f, d_loss: %.8f, g_loss: %.8f" % (accu, errD_fake+errD_real, errG)
+					"d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)
 
 			if FLAGS.if_save and step != 0 and step % FLAGS.save_every_step == 0:
 				save_gan(gan, step, epoch_show, batch_show)
 
 			if FLAGS.if_draw and step % FLAGS.draw_every == 0:
 				print 'Drawing reconstructed sample from testing batch...'
-				# plt.figure(1)
-				# for test_idx in range(15):
-				# 	im = draw_sample(figM, x[test_idx].reshape((30, 30, 30)), ms)
-				# 	plt.subplot(3, 5, test_idx+1)
-				# 	plt.imshow(im)
-				# 	plt.axis('off')
-				# pltfig_3d.suptitle('Target models at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
-				# pltfig_3d.canvas.draw()
-				# pltfig_3d.savefig(params['summary_folder']+'/%d-pltfig_3d_gnd.png'%step)
 				plt.figure(1)
-				print x_recon.shape
+				print G.shape
 				for test_idx in range(2):
-					im = draw_sample(figM, x_recon[test_idx].reshape((30, 30, 30)), ms)
+					im = draw_sample(figM, G[test_idx].reshape((30, 30, 30)), ms)
 					plt.subplot(3, 5, test_idx+1)
 					plt.imshow(im)
 					plt.axis('off')
 				pltfig_3d.suptitle('Reconstructed models at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
 				pltfig_3d.canvas.draw()
-				pltfig_3d.savefig(params['summary_folder']+'/%d-pltfig_3d_recon.png'%step)
+				pltfig_3d.savefig('./saved_images/%d-pltfig_3d_recon.png'%step)
 			end_time = time.time()
 			elapsed = end_time - start_time
 			print "--- Time %f seconds."%elapsed
