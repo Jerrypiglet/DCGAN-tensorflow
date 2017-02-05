@@ -189,6 +189,9 @@ class VariationalAutoencoder(object):
 		self.d_vars = [var for var in t_vars if 'discriminator' in var.name]
 		self.g_vars = [var for var in t_vars if 'generator' in var.name]
 
+		print [var.name for var in t_vars if 'discriminator' in var.name]
+		print [var.name for var in t_vars if 'generator' in var.name]
+
 		learning_rate_ger = 5e-5
 		learning_rate_dis = 5e-5
 		# update Citers times of critic in one iter(unless i < 25 or i % 500 == 0, i is iterstep)
