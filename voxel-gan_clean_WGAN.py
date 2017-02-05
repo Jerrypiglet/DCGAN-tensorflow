@@ -2,7 +2,7 @@ import numpy as np
 import random
 import tensorflow as tf
 import math
-from libs.activations import lrelu
+# from libs.activations import lrelu
 import tflearn
 from sklearn.manifold import TSNE
 from tsne import bh_sne
@@ -72,6 +72,12 @@ flags.DEFINE_boolean("if_unlock_decoder0", False, "if unlock decoder0")
 # flags.DEFINE_boolean("if_s_trainable", True, "if recog s is trainable")
 global FLAGS
 FLAGS = flags.FLAGS
+
+def lrelu(x, leak=0.3, name="lrelu"):
+	with tf.variable_scope(name):
+		f1 = 0.5 * (1 + leak)
+		f2 = 0.5 * (1 - leak)
+		return f1 * x + f2 * abs(x)
 
 class VariationalAutoencoder(object):
 	def __init__(self, params):
@@ -225,9 +231,10 @@ class VariationalAutoencoder(object):
 
 				def conv_layer(current_input, kernel_shape, strides, scope, transfer_fct, is_training, if_batch_norm, padding, trainable):
 					# kernel = tf.truncated_normal(kernel_shape, dtype=tf.float32, stddev=1e-3)
-					kernel = tf.Variable(
-						tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
-						trainable=trainable)
+					# kernel = tf.Variable(
+					# 	tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
+					# 	trainable=trainable)
+					kernel = tf.Variable(tf.random_normal(kernel_shape, stddev=0.02))
 					biases = tf.Variable(tf.zeros(shape=[kernel_shape[-1]], dtype=tf.float32), trainable=trainable)
 					if if_batch_norm:
 						current_output = transfer_fct(
@@ -278,9 +285,10 @@ class VariationalAutoencoder(object):
 
 			def deconv_layer(current_input, kernel_shape, strides, output_shape, scope, transfer_fct, is_training, if_batch_norm, padding, trainable):
 				# kernel = tf.truncated_normal(kernel_shape, dtype=tf.float32, stddev=1e-1)
-				kernel = tf.Variable(
-					tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
-					trainable=trainable)
+				# kernel = tf.Variable(
+				# 	tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
+				# 	trainable=trainable)
+				kernel = tf.Variable(tf.random_normal(kernel_shape, stddev=0.02))
 				biases = tf.Variable(tf.zeros(shape=[kernel_shape[-2]], dtype=tf.float32), trainable=trainable)
 				if if_batch_norm:
 					current_output = transfer_fct(

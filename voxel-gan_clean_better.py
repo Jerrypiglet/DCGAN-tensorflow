@@ -84,7 +84,7 @@ def conv3d(x, W, stride=2):
 def deconv3d(x, W, output_shape, stride=2):
 	return tf.nn.conv3d_transpose(x, W, output_shape, strides=[1, stride, stride, stride, 1], padding='SAME')
 
-def lrelu(x, leak=0.2, name="lrelu"):
+def lrelu(x, leak=0.3, name="lrelu"):
 	with tf.variable_scope(name):
 		f1 = 0.5 * (1 + leak)
 		f2 = 0.5 * (1 - leak)
