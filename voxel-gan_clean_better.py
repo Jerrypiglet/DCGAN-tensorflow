@@ -453,7 +453,7 @@ class VariationalAutoencoder(object):
 			# hidden_tensor_inv = tf.contrib.layers.fully_connected(hidden_tensor_inv, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable)
 			hidden_tensor_inv = vbn(tf.contrib.layers.fully_connected(hidden_tensor_inv, self.flatten_length, activation_fn=self.transfer_fct_conv, trainable=trainable), "generator-fc-2")
 
-			current_input = tf.reshape(hidden_tensor_inv, [-1, 2, 2, 2, 512])
+			current_input = tf.reshape(hidden_tensor_inv, [-1, 2, 2, 2, 256])
 			print 'current_input', current_input.get_shape().as_list()
 
 			def deconv_layer(current_input, kernel_shape, strides, output_shape, scope, transfer_fct, is_training, if_batch_norm, padding, trainable):
