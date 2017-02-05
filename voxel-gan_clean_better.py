@@ -468,7 +468,7 @@ class VariationalAutoencoder(object):
 					current_output = transfer_fct(
 						vbn(
 							tf.add(deconv3d(current_input, kernel,
-								output_shape), biases),
+								output_shape), biases), scope
 							)
 						)
 				else:
