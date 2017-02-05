@@ -140,7 +140,6 @@ class VirtualBatchNormalization(object):
 			shape = x.get_shape().as_list()
 
 		with tf.variable_scope(name) as scope:
-			print name
 			assert name.startswith("descriminator") or name.startswith("generator")
 			self.epsilon = epsilon
 			self.name = name
@@ -154,7 +153,7 @@ class VirtualBatchNormalization(object):
 				assert False
 			self.mean = tf.reduce_mean(half, [0, 1, 2], keep_dims=True)
 			self.mean_sq = tf.reduce_mean(tf.square(half), [0, 1, 2], keep_dims=True)
-			self.batch_size = int(half.get_shape()[0])
+			self.batch_size = dyn_batch_size
 			assert x is not None
 			assert self.mean is not None
 			assert self.mean_sq is not None
