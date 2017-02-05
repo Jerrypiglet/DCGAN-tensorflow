@@ -332,8 +332,8 @@ class VariationalAutoencoder(object):
 		# # 	tf.nn.sparse_softmax_cross_entropy_with_logits(
 		# 		logits=self.D_logits_, labels=tf.ones([self.batch_size], dtype=tf.int64)))
 
-		label_real = np.zeros([batch_size, 2], dtype=np.float32)
-		label_fake = np.zeros([batch_size, 2], dtype=np.float32)
+		label_real = np.zeros([self.batch_size, 2], dtype=np.float32)
+		label_fake = np.zeros([self.batch_size, 2], dtype=np.float32)
 		label_real[:, 0] = 1
 		label_fake[:, 1] = 1
 
