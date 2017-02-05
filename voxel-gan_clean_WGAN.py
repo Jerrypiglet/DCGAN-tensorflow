@@ -164,14 +164,13 @@ class VariationalAutoencoder(object):
 			- self.D_logits)
 		self.d_loss_fake = tf.reduce_mean(
 			self.D_logits_)
+		self.d_loss = self.d_loss_real + self.d_loss_fake
 		self.g_loss = tf.reduce_mean(
 			- self.D_logits_)
 
 		self.d_loss_real_sum = tf.scalar_summary("d_loss_real", self.d_loss_real)
 		self.d_loss_fake_sum = tf.scalar_summary("d_loss_fake", self.d_loss_fake)
 													
-		self.d_loss = self.d_loss_real + self.d_loss_fake
-
 		self.g_loss_sum = tf.scalar_summary("g_loss", self.g_loss)
 		self.d_loss_sum = tf.scalar_summary("d_loss", self.d_loss)
 
@@ -490,9 +489,9 @@ def train(gan):
 					print 'Drawing reconstructed sample from testing batch...'
 					plt.figure(1)
 					print G.shape
-					for test_idx in range(1):
+					for test_idx in range(2):
 						im = draw_sample(figM, G[test_idx].reshape((30, 30, 30)), ms)
-						plt.subplot(3, 5, test_idx+1)
+						plt.subplot(1, 2, test_idx+1)
 						plt.imshow(im)
 						plt.axis('off')
 					pltfig_3d.suptitle('Reconstructed models at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
