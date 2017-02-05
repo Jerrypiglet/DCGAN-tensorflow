@@ -72,6 +72,148 @@ flags.DEFINE_boolean("if_unlock_decoder0", False, "if unlock decoder0")
 global FLAGS
 FLAGS = flags.FLAGS
 
+def weight_variable(shape):
+	return tf.Variable(tf.random_normal(shape, stddev=0.02))
+
+def bias_variable(shape):
+	return tf.Variable(tf.constant(0.1, shape=shape))
+
+def conv3d(x, W, stride=2):
+	return tf.nn.conv3d(x, W, strides=[1, stride, stride, stride, 1], padding='SAME')
+
+def deconv3d(x, W, output_shape, stride=2):
+	return tf.nn.conv3d_transpose(x, W, output_shape, strides=[1, stride, stride, stride, 1], padding='SAME')
+
+def lrelu(x, leak=0.2, name="lrelu"):
+	with tf.variable_scope(name):
+		f1 = 0.5 * (1 + leak)
+		f2 = 0.5 * (1 - leak)
+		return f1 * x + f2 * abs(x)
+
+class BatchNormalization(object):
+
+	def __init__(self, shape, name, decay=0.9, epsilon=1e-5):
+		with tf.variable_scope(name):
+			self.beta = tf.Variable(tf.constant(0.0, shape=shape), name="beta") # offset
+			self.gamma = tf.Variable(tf.constant(1.0, shape=shape), name="gamma") # scale
+			self.ema = tf.train.ExponentialMovingAverage(decay=decay)
+			self.epsilon = epsilon
+
+	def __call__(self, x, train):
+		self.train = train
+		n_axes = len(x.get_shape()) - 1
+		batch_mean, batch_var = tf.nn.moments(x, range(n_axes))
+		mean, variance = self.ema_mean_variance(batch_mean, batch_var)
+		return tf.nn.batch_normalization(x, mean, variance, self.beta, self.gamma, self.epsilon)
+
+	def ema_mean_variance(self, mean, variance):
+		def with_update():
+			ema_apply = self.ema.apply([mean, variance])
+			with tf.control_dependencies([ema_apply]):
+				return tf.identity(mean), tf.identity(variance)
+		return tf.cond(self.train, with_update, lambda: (self.ema.average(mean), self.ema.average(variance)))
+
+# code from https://github.com/openai/improved-gan
+class VirtualBatchNormalization(object):
+
+	def __init__(self, x, name, epsilon=1e-5, half=None):
+		"""
+		x is the reference batch
+		"""
+		assert isinstance(epsilon, float)
+
+		self.half = half
+		shape = x.get_shape().as_list()
+		needs_reshape = len(shape) != 4
+
+		if needs_reshape:
+			orig_shape = shape
+			if len(shape) == 5:
+				x = tf.reshape(x, [shape[0], 1, shape[1]*shape[2]*shape[3], shape[4]])
+			elif len(shape) == 2:
+				x = tf.reshape(x, [shape[0], 1, 1, shape[1]])
+			elif len(shape) == 1:
+				x = tf.reshape(x, [shape[0], 1, 1, 1])
+			else:
+				assert False, shape
+			shape = x.get_shape().as_list()
+
+		with tf.variable_scope(name) as scope:
+			assert name.startswith("d_") or name.startswith("g_")
+			self.epsilon = epsilon
+			self.name = name
+			if self.half is None:
+				half = x
+			elif self.half == 1:
+				half = tf.slice(x, [0, 0, 0, 0], [shape[0] // 2, shape[1], shape[2], shape[3]])
+			elif self.half == 2:
+				half = tf.slice(x, [shape[0] // 2, 0, 0, 0], [shape[0] // 2, shape[1], shape[2], shape[3]])
+			else:
+				assert False
+			self.mean = tf.reduce_mean(half, [0, 1, 2], keep_dims=True)
+			self.mean_sq = tf.reduce_mean(tf.square(half), [0, 1, 2], keep_dims=True)
+			self.batch_size = int(half.get_shape()[0])
+			assert x is not None
+			assert self.mean is not None
+			assert self.mean_sq is not None
+			out = self._normalize(x, self.mean, self.mean_sq, "reference")
+			if needs_reshape:
+				out = tf.reshape(out, orig_shape)
+			self.reference_output = out
+
+	def __call__(self, x):
+		shape = x.get_shape().as_list()
+		needs_reshape = len(shape) != 4
+
+		if needs_reshape:
+			orig_shape = shape
+			if len(shape) == 5:
+				x = tf.reshape(x, [shape[0], 1, shape[1]*shape[2]*shape[3], shape[4]])
+			elif len(shape) == 2:
+				x = tf.reshape(x, [shape[0], 1, 1, shape[1]])
+			elif len(shape) == 1:
+				x = tf.reshape(x, [shape[0], 1, 1, 1])
+			else:
+				assert False, shape
+			shape = x.get_shape().as_list()
+
+		with tf.variable_scope(self.name, reuse=True) as scope:
+			new_coeff = 1. / (self.batch_size + 1.)
+			old_coeff = 1. - new_coeff
+			new_mean = tf.reduce_mean(x, [0, 1, 2], keep_dims=True)
+			new_mean_sq = tf.reduce_mean(tf.square(x), [0, 1, 2], keep_dims=True)
+			mean = new_coeff * new_mean + old_coeff * self.mean
+			mean_sq = new_coeff * new_mean_sq + old_coeff * self.mean_sq
+			out = self._normalize(x, mean, mean_sq, "live")
+			if needs_reshape:
+				out = tf.reshape(out, orig_shape)
+			return out
+
+	def _normalize(self, x, mean, mean_sq, message):
+		# make sure this is called with a variable scope
+		shape = x.get_shape().as_list()
+		assert len(shape) == 4
+		self.gamma = tf.get_variable("gamma", [shape[-1]], initializer=tf.random_normal_initializer(1., 0.02))
+		self.beta = tf.get_variable("beta", [shape[-1]], initializer=tf.constant_initializer(0.))
+		gamma = tf.reshape(self.gamma, [1, 1, 1, -1])
+		beta = tf.reshape(self.beta, [1, 1, 1, -1])
+		assert self.epsilon is not None
+		assert mean_sq is not None
+		assert mean is not None
+		std = tf.sqrt(self.epsilon + mean_sq - tf.square(mean))
+		out = x - mean
+		out = out / std
+		# out = tf.Print(out, [tf.reduce_mean(out, [0, 1, 2]),
+		#    tf.reduce_mean(tf.square(out - tf.reduce_mean(out, [0, 1, 2], keep_dims=True)), [0, 1, 2])],
+		#    message, first_n=-1)
+		out = out * gamma
+		out = out + beta
+		return out
+
+def vbn(x, name):
+	f = VirtualBatchNormalization(x, name)
+	return f(x)
+
 class VariationalAutoencoder(object):
 	def __init__(self, params, transfer_fct=tf.nn.sigmoid):
 		self.params = params
@@ -154,41 +296,50 @@ class VariationalAutoencoder(object):
 		with tf.device('/gpu:0'):
 			self.z = tf.placeholder(tf.float32, [None, self.z_size], name='z')
 			self.z_sum = tf.histogram_summary("z", self.z)
-			self.D, self.D_logits = self._discriminator(self.x0)
-			self.G, self.G_ = self._generator(self.z)
-			self.G_sum = tf.histogram_summary("G", tf.reshape(self.G_, [-1]))
+			self.y = self._discriminator(self.x0)
+			self.x_, self.x_nogate = self._generator(self.z)
+			self.G_sum = tf.histogram_summary("G", tf.reshape(self.x_nogate, [-1]))
 
 		with tf.device('/gpu:0'):
-			self.D_, self.D_logits_ = self._discriminator(self.G, reuse=True)
+			self.y_ = self._discriminator(self.x_, reuse=True)
 
 	def _create_loss_optimizer(self):
-		self.d_loss_real = tf.reduce_mean(
-			tf.nn.sigmoid_cross_entropy_with_logits(
-				logits=self.D_logits, targets=tf.ones_like(self.D)))
-		self.d_loss_fake = tf.reduce_mean(
-			tf.nn.sigmoid_cross_entropy_with_logits(
-				logits=self.D_logits_, targets=tf.zeros_like(self.D_)))
 		# self.d_loss_real = tf.reduce_mean(
-		# 	tf.nn.sparse_softmax_cross_entropy_with_logits(
-		# 		logits=self.D_logits, labels=tf.ones([self.batch_size], dtype=tf.int64)))
+		# 	tf.nn.sigmoid_cross_entropy_with_logits(
+		# 		logits=self.D_logits, targets=tf.ones_like(self.D)))
 		# self.d_loss_fake = tf.reduce_mean(
-		# 	tf.nn.sparse_softmax_cross_entropy_with_logits(
-		# 		logits=self.D_logits_, labels=tf.zeros([self.batch_size], dtype=tf.int64)))
+		# 	tf.nn.sigmoid_cross_entropy_with_logits(
+		# 		logits=self.D_logits_, targets=tf.zeros_like(self.D_)))
+		# # self.d_loss_real = tf.reduce_mean(
+		# # 	tf.nn.sparse_softmax_cross_entropy_with_logits(
+		# # 		logits=self.D_logits, labels=tf.ones([self.batch_size], dtype=tf.int64)))
+		# # self.d_loss_fake = tf.reduce_mean(
+		# # 	tf.nn.sparse_softmax_cross_entropy_with_logits(
+		# # 		logits=self.D_logits_, labels=tf.zeros([self.batch_size], dtype=tf.int64)))
 
-		self.accu_real = tf.reduce_mean(self.D)
-		self.accu_fake = 1. - tf.reduce_mean(self.D_)
+		self.accu_real = tf.reduce_mean(self.y)
+		self.accu_fake = 1. - tf.reduce_mean(self.y_)
 
-		self.g_loss = tf.reduce_mean(
-			tf.nn.sigmoid_cross_entropy_with_logits(
-				logits=self.D_logits_, targets=tf.ones_like(self.D_)))
 		# self.g_loss = tf.reduce_mean(
-		# 	tf.nn.sparse_softmax_cross_entropy_with_logits(
+		# 	tf.nn.sigmoid_cross_entropy_with_logits(
+		# 		logits=self.D_logits_, targets=tf.ones_like(self.D_)))
+		# # self.g_loss = tf.reduce_mean(
+		# # 	tf.nn.sparse_softmax_cross_entropy_with_logits(
 		# 		logits=self.D_logits_, labels=tf.ones([self.batch_size], dtype=tf.int64)))
 
-		self.d_loss_real_sum = tf.scalar_summary("d_loss_real", self.d_loss_real)
-		self.d_loss_fake_sum = tf.scalar_summary("d_loss_fake", self.d_loss_fake)
+		label_real = np.zeros([batch_size, 2], dtype=np.float32)
+		label_fake = np.zeros([batch_size, 2], dtype=np.float32)
+		label_real[:, 0] = 1
+		label_fake[:, 1] = 1
+
+		self.g_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_, tf.constant(label_real)))
+		self.d_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_, tf.constant(label_fake)))
+		self.d_loss += tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y, tf.constant(label_real)))
+
+		# self.d_loss_real_sum = tf.scalar_summary("d_loss_real", self.d_loss_real)
+		# self.d_loss_fake_sum = tf.scalar_summary("d_loss_fake", self.d_loss_fake)
 													
-		self.d_loss = self.d_loss_real + self.d_loss_fake
+		# self.d_loss = self.d_loss_real + self.d_loss_fake
 
 		self.g_loss_sum = tf.scalar_summary("g_loss", self.g_loss)
 		self.d_loss_sum = tf.scalar_summary("d_loss", self.d_loss)
@@ -202,19 +353,19 @@ class VariationalAutoencoder(object):
 
 		# slim.get_variables_to_restore(include=["encoder0","decoder0","step"])
 
-		self.d_optim = tf.train.AdamOptimizer(1e-5, beta1=FLAGS.beta1) \
+		self.d_optim = tf.train.AdamOptimizer(1e-4, beta1=FLAGS.beta1) \
 							.minimize(self.d_loss, var_list=self.d_vars)
-		self.g_optim = tf.train.AdamOptimizer(0.00002, beta1=FLAGS.beta1) \
+		self.g_optim = tf.train.AdamOptimizer(1e-4, beta1=FLAGS.beta1) \
 							.minimize(self.g_loss, var_list=self.g_vars)
 
-		self.g_sum = tf.merge_summary([self.z_sum, self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
+		self.g_sum = tf.merge_summary([self.z_sum, self.G_sum, self.g_loss_sum])
 		self.d_sum = tf.merge_summary(
 				[self.z_sum, self.G_sum, self.d_loss_real_sum, self.d_loss_sum])
 
-	def BatchNorm(self, inputT, trainable, scope=None):
-		if trainable:
-			print '########### BN trainable!!!'
-		return tflearn.layers.normalization.batch_normalization(inputT, trainable=trainable)
+	# def BatchNorm(self, inputT, trainable, scope=None):
+	# 	if trainable:
+	# 		print '########### BN trainable!!!'
+	# 	return tflearn.layers.normalization.batch_normalization(inputT, trainable=trainable)
 
 	def _discriminator(self, input_tensor, trainable=True, reuse=False):
 		with tf.variable_scope("discriminator") as scope:
@@ -224,97 +375,117 @@ class VariationalAutoencoder(object):
 			with slim.arg_scope([slim.fully_connected], trainable=FLAGS.train_net):
 				input_shape=[None, 27000]
 
-				x_tensor = tf.reshape(input_tensor, [-1, 30, 30, 30, 1])
-				current_input = x_tensor
+				# x_tensor = tf.reshape(input_tensor, [-1, 30, 30, 30, 1])
+				noisy_x = input_tensor + tf.random_normal([shape[0], 32, 32, 32, 1])
+				current_input = noisy_x
 
 				def conv_layer(current_input, kernel_shape, strides, scope, transfer_fct, is_training, if_batch_norm, padding, trainable):
-					# kernel = tf.truncated_normal(kernel_shape, dtype=tf.float32, stddev=1e-3)
-					kernel = tf.Variable(
-						tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 20), 1.0 / (math.sqrt(kernel_shape[3]) + 20)), 
-						trainable=trainable)
-					biases = tf.Variable(tf.zeros(shape=[kernel_shape[-1]], dtype=tf.float32), trainable=trainable)
+					# kernel = tf.Variable(
+					# 	tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 20), 1.0 / (math.sqrt(kernel_shape[3]) + 20)), 
+					# 	trainable=trainable)
+					# biases = tf.Variable(tf.zeros(shape=[kernel_shape[-1]], dtype=tf.float32), trainable=trainable)
+					kernel = weight_variable(kernel_shape)
+					biases = bias_variable([kernel_shape[-2]])
+
 					if if_batch_norm:
+						bn_func = BatchNormalization([kernel_shape[4]], scope)
 						current_output = transfer_fct(
-							self.BatchNorm(
-								tf.add(tf.nn.conv3d(current_input, kernel, strides, padding), biases),
-								trainable=trainable, scope=scope
+							bn_func(
+								tf.add(conv3d(current_input, kernel), biases),
 								)
 							)
 					else:
 						current_output = transfer_fct(
-								tf.nn.bias_add(tf.nn.conv3d(current_input, kernel, strides, padding), biases),
+								tf.add(conv3d(current_input, kernel), biases),
 							)
 					return current_output
 				def transfer_fct_none(x):
 					return x
 
-				current_input = conv_layer(current_input, [4, 4, 4, 1, 64], [1, 2, 2, 2, 1], 'BN-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+				current_input = conv_layer(current_input, [4, 4, 4, 1, 32], [1, 2, 2, 2, 1], 'BN-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 				print current_input.get_shape().as_list()
-				current_input = conv_layer(current_input, [4, 4, 4, 64, 128], [1, 2, 2, 2, 1], 'BN-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+				current_input = conv_layer(current_input, [4, 4, 4, 32, 64], [1, 2, 2, 2, 1], 'BN-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 				print current_input.get_shape().as_list()
-				current_input = conv_layer(current_input, [4, 4, 4, 128, 256], [1, 2, 2, 2, 1], 'BN-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+				current_input = conv_layer(current_input, [4, 4, 4, 64, 128], [1, 2, 2, 2, 1], 'BN-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 				print current_input.get_shape().as_list()
-				current_input = conv_layer(current_input, [4, 4, 4, 256, 512], [1, 2, 2, 2, 1], 'BN-3', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+				current_input = conv_layer(current_input, [4, 4, 4, 128, 256], [1, 2, 2, 2, 1], 'BN-3', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 				print current_input.get_shape().as_list()
 				# current_input = conv_layer(current_input, [4, 4, 4, 512, 1], [1, 1, 1, 1, 1], 'BN-4', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 				# print current_input.get_shape().as_list()
 
 				self.before_flatten_shape = current_input.get_shape().as_list()
 				self.flatten_shape = tf.pack([-1, np.prod(current_input.get_shape().as_list() [1:])])
-				flattened = tf.reshape(current_input, self.flatten_shape)
-				self.flatten_length = flattened.get_shape().as_list()[1]
+				h = tf.reshape(current_input, self.flatten_shape)
+				self.flatten_length = h.get_shape().as_list()[1]
 
 				print '---------- _>>> discriminator: flatten length:', self.flatten_length
-				hidden_tensor = tf.contrib.layers.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable)
-				hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable)
-				hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, 1, activation_fn=None, trainable=trainable)
-				return (tf.nn.sigmoid(hidden_tensor), hidden_tensor)
+
+				self.n_kernels = 300
+				self.dim_per_kernel = 50
+				kernel_h5 = weight_variable([2*2*2*256+self.n_kernels, 2])
+				kernel_md = weight_variable([2*2*2*256, self.n_kernels*self.dim_per_kernel])
+				bias_h5 = bias_variable([2]),
+				bias_md = bias_variable([self.n_kernels])
+
+				m = tf.matmul(h, kernel_md)
+				m = tf.reshape(m, [-1, self.n_kernels, self.dim_per_kernel])
+				abs_dif = tf.reduce_sum(tf.abs(tf.expand_dims(m, 3) - tf.expand_dims(tf.transpose(m, [1, 2, 0]), 0)), 2)
+				f = tf.reduce_sum(tf.exp(-abs_dif), 2) + bias_md
+
+				h = tf.concat(1, [h, f])
+		        y = tf.matmul(h, kernel_h5) + bias_h5
+		        return y
+
+				# hidden_tensor = tf.contrib.layers.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable)
+				# hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable)
+				# hidden_tensor = tf.contrib.layers.fully_connected(hidden_tensor, 1, activation_fn=None, trainable=trainable)
+				# return (tf.nn.sigmoid(hidden_tensor), hidden_tensor)
 
 	def _generator(self, input_sample, trainable=True):
 		with tf.variable_scope("generator") as scope:
 			dyn_batch_size = tf.shape(input_sample)[0]
-			hidden_tensor_inv = tf.contrib.layers.fully_connected(input_sample, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable)
-			hidden_tensor_inv = tf.contrib.layers.fully_connected(hidden_tensor_inv, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable)
-			hidden_tensor_inv = tf.contrib.layers.fully_connected(hidden_tensor_inv, self.flatten_length, activation_fn=self.transfer_fct_conv, trainable=trainable)
+			hidden_tensor_inv = vbn(tf.contrib.layers.fully_connected(input_sample, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable))
+			# hidden_tensor_inv = tf.contrib.layers.fully_connected(hidden_tensor_inv, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable)
+			hidden_tensor_inv = vbn(tf.contrib.layers.fully_connected(hidden_tensor_inv, self.flatten_length, activation_fn=self.transfer_fct_conv, trainable=trainable))
 
 			current_input = tf.reshape(hidden_tensor_inv, [-1, 2, 2, 2, 512])
 			print 'current_input', current_input.get_shape().as_list()
 
 			def deconv_layer(current_input, kernel_shape, strides, output_shape, scope, transfer_fct, is_training, if_batch_norm, padding, trainable):
 				# kernel = tf.truncated_normal(kernel_shape, dtype=tf.float32, stddev=1e-1)
-				kernel = tf.Variable(
-					tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 20), 1.0 / (math.sqrt(kernel_shape[3]) + 20)), 
-					trainable=trainable)
-				biases = tf.Variable(tf.zeros(shape=[kernel_shape[-2]], dtype=tf.float32), trainable=trainable)
+				# kernel = tf.Variable(
+				# 	tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 20), 1.0 / (math.sqrt(kernel_shape[3]) + 20)), 
+				# 	trainable=trainable)
+				kernel = weight_variable(kernel_shape)
+				biases = bias_variable([kernel_shape[-2]])
+				# biases = tf.Variable(tf.zeros(shape=[kernel_shape[-2]], dtype=tf.float32), trainable=trainable)
 				if if_batch_norm:
 					current_output = transfer_fct(
-						self.BatchNorm(tf.reshape(
-							tf.add(tf.nn.conv3d_transpose(current_input, kernel,
-								output_shape, strides, padding), biases),
-							output_shape),
+						vbn(
+							tf.add(deconv3d(current_input, kernel,
+								output_shape), biases),
 							trainable=trainable, scope=scope
 							)
 						)
 				else:
 					current_output = transfer_fct(
-						tf.reshape(
-							tf.nn.bias_add(tf.nn.conv3d_transpose(current_input, kernel,
-								output_shape, strides, padding), biases),
-							output_shape)
+						tf.add(deconv3d(current_input, kernel,
+							output_shape), biases),
+						trainable=trainable, scope=scope
 						)
 				return current_output
 			def transfer_fct_none(x):
 				return x
-			current_input = deconv_layer(current_input, [4, 4, 4, 256, 512], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 4, 4, 4, 256]), 'BN-deconv-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+			current_input = deconv_layer(current_input, [4, 4, 4, 128, 256], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 4, 4, 4, 256]), 'BN-deconv-0', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
-			current_input = deconv_layer(current_input, [4, 4, 4, 128, 256], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 8, 8, 8, 128]), 'BN-deconv-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding ="SAME", trainable=trainable)
+			current_input = deconv_layer(current_input, [4, 4, 4, 64, 128], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 8, 8, 8, 128]), 'BN-deconv-1', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding ="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
-			current_input = deconv_layer(current_input, [4, 4, 4, 64, 128], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 15, 15, 15, 64]), 'BN-deconv-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
+			current_input = deconv_layer(current_input, [4, 4, 4, 32, 64], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 15, 15, 15, 64]), 'BN-deconv-2', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
-			current_input = deconv_layer(current_input, [4, 4, 4, 1, 64], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 30, 30, 30, 1]), 'BN-deconv-3', transfer_fct_none, is_training=self.is_training, if_batch_norm=False, padding="SAME", trainable=trainable)
+			current_input = deconv_layer(current_input, [4, 4, 4, 1, 32], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 30, 30, 30, 1]), 'BN-deconv-3', transfer_fct_none, is_training=self.is_training, if_batch_norm=False, padding="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
 			print '---------- _<<< generator: flatten length:', self.flatten_length
-			return (tf.nn.sigmoid(current_input), current_input)
+			return (tf.nn.tanh(current_input), current_input)
 
 	# def _train_align0(self, is_training):
 	# 	_, cost, cost_recon, cost_gan, merged, \
@@ -494,20 +665,20 @@ def train(gan):
 			accu = 0.5 *(accu_real + accu_fake)
 			print accu, accu_fake, accu_real
 			# Update D network
-			if accu < 0.7:
-				_, summary_str_1 = gan.sess.run([gan.d_optim, gan.d_sum],
-					feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
-			else:
-				summary_str_1 = gan.sess.run(gan.d_sum,
-					feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
+			# if accu < 0.7:
+			_, summary_str_1 = gan.sess.run([gan.d_optim, gan.d_sum],
+				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
+			# else:
+			# 	summary_str_1 = gan.sess.run(gan.d_sum,
+			# 		feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
 
 			# Update G network
 			_, summary_str_2 = gan.sess.run([gan.g_optim, gan.g_sum],
 				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
 
-			# Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-			_, summary_str_3 = gan.sess.run([gan.g_optim, gan.g_sum],
-				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
+			# # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
+			# _, summary_str_3 = gan.sess.run([gan.g_optim, gan.g_sum],
+			# 	feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
 
 			x_recon, errD_fake, errD_real, errG, step = gan.sess.run([gan.G, gan.d_loss_fake, gan.d_loss_real, gan.g_loss, gan.global_step],
 				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
@@ -518,7 +689,7 @@ def train(gan):
 			if FLAGS.if_summary:
 				gan.train_writer.add_summary(summary_str_1, step)
 				gan.train_writer.add_summary(summary_str_2, step)
-				gan.train_writer.add_summary(summary_str_3, step)
+				# gan.train_writer.add_summary(summary_str_3, step)
 				gan.train_writer.flush()
 				if FLAGS.train_net:
 					print "STEP", '%03d' % (step), "Epo", '%03d' % (epoch_show), "ba", '%03d' % (batch_show), \
