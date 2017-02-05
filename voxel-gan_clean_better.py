@@ -35,7 +35,7 @@ flags.DEFINE_integer("resume_from", -1, "resume from")
 flags.DEFINE_boolean("train_net", True, "train net: True for training net 0, false for training net 1")
 flags.DEFINE_boolean("restore_encoder0", False, "training net 1 and restoring net 0 from saved points")
 flags.DEFINE_integer("n_z", 100, "hidden size")
-flags.DEFINE_integer("batch_size", 200, "batch_size")
+flags.DEFINE_integer("batch_size", 100, "batch_size")
 flags.DEFINE_integer("models_in_batch", 40, "models in a batch")
 flags.DEFINE_float("learning_rate", 0.001, "learning rate")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
@@ -322,8 +322,8 @@ class VariationalAutoencoder(object):
 		# # 	tf.nn.sparse_softmax_cross_entropy_with_logits(
 		# # 		logits=self.D_logits_, labels=tf.zeros([self.batch_size], dtype=tf.int64)))
 
-		self.accu_real = tf.reduce_mean(self.y)
-		self.accu_fake = 1. - tf.reduce_mean(self.y_)
+		# self.accu_real = tf.reduce_mean(self.y)
+		# self.accu_fake = 1. - tf.reduce_mean(self.y_)
 
 		# self.g_loss = tf.reduce_mean(
 		# 	tf.nn.sigmoid_cross_entropy_with_logits(
@@ -664,10 +664,11 @@ def train(gan):
 			batch_z = np.random.normal(0., 1., [gan.batch_size, gan.z_size]) \
 							.astype(np.float32)
 
-			accu_real, accu_fake = gan.sess.run([gan.accu_real, gan.accu_fake],
-				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
-			accu = 0.5 *(accu_real + accu_fake)
-			print accu, accu_fake, accu_real
+			# accu_real, accu_fake = gan.sess.run([gan.accu_real, gan.accu_fake],
+			# 	feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
+			# accu = 0.5 *(accu_real + accu_fake)
+			# print accu, accu_fake, accu_real
+
 			# Update D network
 			# if accu < 0.7:
 			_, summary_str_1 = gan.sess.run([gan.d_optim, gan.d_sum],
@@ -684,7 +685,7 @@ def train(gan):
 			# _, summary_str_3 = gan.sess.run([gan.g_optim, gan.g_sum],
 			# 	feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
 
-			x_recon, errD_fake, errD_real, errG, step = gan.sess.run([gan.G, gan.d_loss_fake, gan.d_loss_real, gan.g_loss, gan.global_step],
+			x_recon, errD, errG, step = gan.sess.run([gan.G, gan.d_loss, gan.g_loss, gan.global_step],
 				feed_dict={gan.z: batch_z, gan.is_training: True, gan.gen.is_training: True, gan.is_queue: True, gan.train_net: True})
 
 			epoch_show = math.floor(float(step) * FLAGS.models_in_batch / float(num_samples))
@@ -697,7 +698,7 @@ def train(gan):
 				gan.train_writer.flush()
 				if FLAGS.train_net:
 					print "STEP", '%03d' % (step), "Epo", '%03d' % (epoch_show), "ba", '%03d' % (batch_show), \
-					"accu: %.4f, d_loss: %.8f, g_loss: %.8f" % (accu, errD_fake+errD_real, errG)
+					"d_loss: %.8f, g_loss: %.8f" % (errD, errG)
 
 			if FLAGS.if_save and step != 0 and step % FLAGS.save_every_step == 0:
 				save_gan(gan, step, epoch_show, batch_show)
