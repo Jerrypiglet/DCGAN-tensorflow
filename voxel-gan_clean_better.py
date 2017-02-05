@@ -376,7 +376,7 @@ class VariationalAutoencoder(object):
 				input_shape=[None, 27000]
 				dyn_batch_size = tf.shape(input_tensor)[0]
 				# x_tensor = tf.reshape(input_tensor, [-1, 30, 30, 30, 1])
-				noisy_x = input_tensor + tf.random_normal(tf.pack([dyn_batch_size, 32, 32, 32, 1]))
+				noisy_x = input_tensor + tf.random_normal(tf.pack([dyn_batch_size, 30, 30, 30, 1]))
 				current_input = noisy_x
 
 				def conv_layer(current_input, kernel_shape, strides, scope, transfer_fct, is_training, if_batch_norm, padding, trainable):
