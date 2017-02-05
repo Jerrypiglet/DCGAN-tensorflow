@@ -161,7 +161,7 @@ class VariationalAutoencoder(object):
 			self.z_sum = tf.histogram_summary("z", self.z)
 
 			self.flatten_length = 2048
-			
+
 			self.D_logits = self._discriminator(self.x0)
 			self.G, self.G_noGate = self._generator(self.z)
 			self.G_sum = tf.histogram_summary("G", tf.reshape(self.G_noGate, [-1]))
@@ -217,10 +217,10 @@ class VariationalAutoencoder(object):
 
 		self.merged_summary = tf.merge_summary([self.g_loss_sum, self.d_loss_sum, self.z_sum, self.G_sum, self.d_loss_fake_sum, self.d_loss_real_sum])
 
-	def BatchNorm(self, inputT, trainable=True, scope=None):
+	def BatchNorm(self, inputT, trainable=True, scope=None, reuse=None):
 		if trainable:
 			print '########### BN trainable!!!'
-		return tflearn.layers.normalization.batch_normalization(inputT, trainable=trainable)
+		return tflearn.layers.normalization.batch_normalization(inputT, trainable=trainable, scope=scope, reuse=reuse)
 
 	def _discriminator(self, input_tensor, trainable=True, reuse=False):
 		with tf.variable_scope("discriminator") as scope:
@@ -242,7 +242,7 @@ class VariationalAutoencoder(object):
 						current_output = transfer_fct(
 							self.BatchNorm(
 								tf.add(tf.nn.conv3d(current_input, kernel, strides, padding), biases),
-								trainable=trainable, scope=scope
+								trainable=trainable, scope=scope, reuse=True
 								)
 							)
 					else:
@@ -298,7 +298,7 @@ class VariationalAutoencoder(object):
 							tf.add(tf.nn.conv3d_transpose(current_input, kernel,
 								output_shape, strides, padding), biases),
 							output_shape),
-							trainable=trainable, scope=scope
+							trainable=trainable, scope=scope, reuse=None
 							)
 						)
 				else:
