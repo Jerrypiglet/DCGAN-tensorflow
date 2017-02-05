@@ -159,6 +159,9 @@ class VariationalAutoencoder(object):
 		with tf.device('/gpu:0'):
 			self.z = tf.placeholder(tf.float32, [None, self.z_size], name='z')
 			self.z_sum = tf.histogram_summary("z", self.z)
+
+			self.flatten_length = 2048
+			
 			self.D_logits = self._discriminator(self.x0)
 			self.G, self.G_noGate = self._generator(self.z)
 			self.G_sum = tf.histogram_summary("G", tf.reshape(self.G_noGate, [-1]))
@@ -265,7 +268,6 @@ class VariationalAutoencoder(object):
 				# self.flatten_shape = tf.pack([-1, np.prod(current_input.get_shape().as_list() [1:])])
 				flattened = tf.reshape(current_input, self.flatten_shape)
 				# self.flatten_length = flattened.get_shape().as_list()[1]
-				self.flatten_length = 2048
 
 				print '---------- _>>> discriminator: flatten length:', self.flatten_length
 				hidden_tensor = tf.contrib.layers.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, normalizer_fn=ly.batch_norm)
