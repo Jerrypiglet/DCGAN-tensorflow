@@ -158,10 +158,10 @@ class VirtualBatchNormalization(object):
 			assert self.mean is not None
 			assert self.mean_sq is not None
 			out = self._normalize(x, self.mean, self.mean_sq, "reference")
-			if needs_reshape:
-				print orig_shape
-				out = tf.reshape(out, orig_shape)
-			self.reference_output = out
+			# if needs_reshape:
+			# 	print orig_shape
+			# 	out = tf.reshape(out, orig_shape)
+			# self.reference_output = out
 
 	def __call__(self, x):
 		shape = x.get_shape().as_list()
