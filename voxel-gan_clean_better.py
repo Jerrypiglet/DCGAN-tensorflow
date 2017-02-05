@@ -140,7 +140,7 @@ class VirtualBatchNormalization(object):
 			shape = x.get_shape().as_list()
 
 		with tf.variable_scope(name) as scope:
-			assert name.startswith("d_") or name.startswith("g_")
+			assert name.startswith("descriminator_") or name.startswith("generator_")
 			self.epsilon = epsilon
 			self.name = name
 			if self.half is None:
