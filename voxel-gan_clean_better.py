@@ -469,14 +469,12 @@ class VariationalAutoencoder(object):
 						vbn(
 							tf.add(deconv3d(current_input, kernel,
 								output_shape), biases),
-							trainable=trainable, scope=scope
 							)
 						)
 				else:
 					current_output = transfer_fct(
 						tf.add(deconv3d(current_input, kernel,
 							output_shape), biases),
-						trainable=trainable, scope=scope
 						)
 				return current_output
 			def transfer_fct_none(x):
