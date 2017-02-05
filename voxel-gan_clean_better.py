@@ -183,7 +183,7 @@ class VirtualBatchNormalization(object):
 			shape = x.get_shape().as_list()
 
 		with tf.variable_scope(self.name, reuse=True) as scope:
-			new_coeff = 1. / (FLAGS.batch_size + 1)
+			new_coeff = 1. / (self.batch_size + 1)
 			old_coeff = 1. - new_coeff
 			new_mean = tf.reduce_mean(x, [0, 1, 2], keep_dims=True)
 			new_mean_sq = tf.reduce_mean(tf.square(x), [0, 1, 2], keep_dims=True)
