@@ -153,7 +153,7 @@ class VariationalAutoencoder(object):
 		with tf.device('/gpu:0'):
 			## Define net 0
 			# self.x0 = tf.cond(self.train_net, lambda: self.gen.x0_batch, lambda: self.gen.x_gnd_batch) # aligned models
-			self.x0 = self.gen.x0_batch # aligned models
+			self.x0 = 2 * self.gen.x0_batch - 1.# aligned models
 			self.x0 = tf.transpose(self.x0, perm=[0, 2, 3, 1, 4])
 			self.dyn_batch_size_x0 = tf.shape(self.x0)[0]
 
@@ -325,7 +325,7 @@ class VariationalAutoencoder(object):
 			current_input = deconv_layer(current_input, [4, 4, 4, 1, 32], [1, 2, 2, 2, 1], tf.pack([dyn_batch_size, 30, 30, 30, 1]), 'BN-deconv-3', transfer_fct_none, is_training=self.is_training, if_batch_norm=False, padding="SAME", trainable=trainable)
 			print current_input.get_shape().as_list()
 			print '---------- _<<< generator: flatten length:', self.flatten_length
-			return (tf.nn.sigmoid(current_input), current_input)
+			return (tf.nn.tahn(current_input), current_input)
 
 def train(gan):
 	prepare_for_training(gan)
@@ -363,7 +363,7 @@ def train(gan):
 					plt.figure(1)
 					print G.shape
 					for test_idx in range(2):
-						im = draw_sample(figM, G[test_idx].reshape((30, 30, 30)), ms)
+						im = draw_sample(figM, (G[test_idx].reshape((30, 30, 30)))*0.5+0.5, ms)
 						plt.subplot(1, 2, test_idx+1)
 						plt.imshow(im)
 						plt.axis('off')
