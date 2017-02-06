@@ -380,7 +380,9 @@ def train(gan):
 						plt.axis('off')
 					pltfig_3d.suptitle('Reconstructed models at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
 					pltfig_3d.canvas.draw()
-					pltfig_3d.savefig('./saved_images/%d-pltfig_3d_recon.png'%step)
+					if not os.path.exists('./saved_images/%s/'%FLAGS.folder_name_save_to):
+						os.makedirs('./saved_images/%s/'%FLAGS.folder_name_save_to)
+					pltfig_3d.savefig('./saved_images/%s/%d-pltfig_3d_recon.png'%(FLAGS.folder_name_save_to, step))
 				end_time = time.time()
 				elapsed = end_time - start_time
 				print "--- Time %f seconds."%elapsed
