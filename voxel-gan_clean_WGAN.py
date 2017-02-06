@@ -369,7 +369,7 @@ def train(gan):
 					plt.figure(1)
 					print G.shape
 					for test_idx in range(2):
-						im = draw_sample(figM, (x0[test_idx].reshape((30, 30, 30)))*0.5+0.5, ms)
+						im = draw_sample(figM, (G[test_idx].reshape((30, 30, 30)))*0.5+0.5, ms)
 						plt.subplot(1, 2, test_idx+1)
 						plt.imshow(im)
 						plt.axis('off')
