@@ -291,11 +291,11 @@ class VariationalAutoencoder(object):
 			dyn_batch_size = tf.shape(input_sample)[0]
 			# hidden_tensor_inv = ly.fully_connected(input_sample, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, scope='g_fc1')
 			# hidden_tensor_inv = ly.fully_connected(hidden_tensor_inv, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, scope='g_fc2')
-			hidden_tensor_inv = ly.fully_connected(input_sample, self.flatten_length, activation_fn=self.transfer_fct_conv, , normalizer_fn=ly.batch_norm, trainable=trainable, scope='g_fc3')
+			hidden_tensor_inv = ly.fully_connected(input_sample, self.flatten_length, activation_fn=self.transfer_fct_conv, normalizer_fn=ly.batch_norm, trainable=trainable, scope='g_fc3')
 
 			current_input = tf.reshape(hidden_tensor_inv, [-1, 2, 2, 2, 256])
 			print 'current_input', current_input.get_shape().as_list()
-			
+
 			def deconv_layer(current_input, kernel_shape, strides, output_shape, scope, transfer_fct, is_training, if_batch_norm, padding, trainable):
 				# kernel = tf.truncated_normal(kernel_shape, dtype=tf.float32, stddev=1e-1)
 				# kernel = tf.Variable(
