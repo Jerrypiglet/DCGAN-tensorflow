@@ -40,6 +40,7 @@ flags.DEFINE_integer("n_z", 100, "hidden size")
 flags.DEFINE_integer("batch_size", 200, "batch_size")
 flags.DEFINE_integer("models_in_batch", 40, "models in a batch")
 flags.DEFINE_float("learning_rate", 5e-5, "learning rate")
+flags.DEFINE_float("clamp", 0.01, "clap thresf ro discriminator")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
 # flags.DEFINE_float("reweight_recon", 1.0, "weight for recon loss")
 # flags.DEFINE_float("reweight_reproj", 0.0, "weight for reproj loss")
@@ -75,7 +76,7 @@ flags.DEFINE_boolean("if_unlock_decoder0", False, "if unlock decoder0")
 global FLAGS
 FLAGS = flags.FLAGS
 
-def lrelu(x, leak=0.3, name="lrelu"):
+def lrelu(x, leak=0.2, name="lrelu"):
 	with tf.variable_scope(name):
 		f1 = 0.5 * (1 + leak)
 		f2 = 0.5 * (1 - leak)
@@ -202,8 +203,8 @@ class VariationalAutoencoder(object):
 		# update Citers times of critic in one iter(unless i < 25 or i % 500 == 0, i is iterstep)
 		self.Citers = 5
 		# the upper bound and lower bound of parameters in critic
-		clamp_lower = -0.01
-		clamp_upper = 0.01
+		clamp_lower = -FLAGS.clamp
+		clamp_upper = FLAGS.clamp
 		# whether to use adam for parameter update, if the flag is set False, use tf.train.RMSPropOptimizer
 		# as recommended in paper
 		is_adam = False
