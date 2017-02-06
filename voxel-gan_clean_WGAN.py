@@ -369,7 +369,7 @@ def train(gan):
 				if FLAGS.if_save and step != 0 and step % FLAGS.save_every_step == 0:
 					save_gan(gan, step, epoch_show, batch_show)
 
-				if FLAGS.if_draw and step % FLAGS.draw_every == 0:
+				if FLAGS.if_draw and step % FLAGS.draw_every == 0 and step != 0:
 					print 'Drawing reconstructed sample from testing batch...'
 					plt.figure(1)
 					print G.shape
