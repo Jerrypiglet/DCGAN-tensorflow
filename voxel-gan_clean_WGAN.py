@@ -224,7 +224,7 @@ class VariationalAutoencoder(object):
 		with tf.control_dependencies([self.opt_d]):
 			self.opt_d = tf.tuple(clipped_var_c)
 
-		self.merged_summary = tf.merge_summary([self.g_loss_sum, self.d_loss_sum, self.z_sum, self.G_summ, self.kernel_summary])
+		self.merged_summary = tf.merge_summary([self.g_loss_sum, self.d_loss_sum, self.z_sum, self.G_sum, self.kernel_summary])
 
 	def BatchNorm(self, inputT, trainable=True, scope=None, reuse=None):
 		if trainable:
