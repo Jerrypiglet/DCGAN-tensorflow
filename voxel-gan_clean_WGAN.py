@@ -197,8 +197,8 @@ class VariationalAutoencoder(object):
 		# update Citers times of critic in one iter(unless i < 25 or i % 500 == 0, i is iterstep)
 		self.Citers = 5
 		# the upper bound and lower bound of parameters in critic
-		clamp_lower = -0.01
-		clamp_upper = 0.01
+		clamp_lower = -0.02
+		clamp_upper = 0.02
 		# whether to use adam for parameter update, if the flag is set False, use tf.train.RMSPropOptimizer
 		# as recommended in paper
 		is_adam = False
