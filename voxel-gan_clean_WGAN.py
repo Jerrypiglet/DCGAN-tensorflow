@@ -284,8 +284,8 @@ class VariationalAutoencoder(object):
 			self.flatten_length = flattened.get_shape().as_list()[1]
 
 			print '---------- _>>> discriminator: flatten length:', self.flatten_length
-			hidden_tensor = ly.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, normalizer_fn=ly.batch_norm, trainable=trainable, scope='d_fc1')
-			hidden_tensor = ly.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, scope='d_fc2')
+			hidden_tensor = ly.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, scope='d_fc1')
+			# hidden_tensor = ly.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, scope='d_fc2')
 			hidden_tensor = ly.fully_connected(hidden_tensor, 1, activation_fn=None, trainable=trainable, scope='d_fc3')
 
 			# hidden_tensor = ly.fully_connected(flattened, 1, activation_fn=None)
@@ -294,7 +294,7 @@ class VariationalAutoencoder(object):
 	def _generator(self, input_sample, trainable=True):
 		with tf.variable_scope("generator") as scope:
 			dyn_batch_size = tf.shape(input_sample)[0]
-			hidden_tensor_inv = ly.fully_connected(input_sample, self.flatten_length//4, activation_fn=self.transfer_fct_conv, normalizer_fn=ly.batch_norm, trainable=trainable, scope='g_fc1')
+			# hidden_tensor_inv = ly.fully_connected(input_sample, self.flatten_length//4, activation_fn=self.transfer_fct_conv, normalizer_fn=ly.batch_norm, trainable=trainable, scope='g_fc1')
 			hidden_tensor_inv = ly.fully_connected(hidden_tensor_inv, self.flatten_length//2, activation_fn=self.transfer_fct_conv, normalizer_fn=ly.batch_norm, trainable=trainable, scope='g_fc2')
 			hidden_tensor_inv = ly.fully_connected(input_sample, self.flatten_length, activation_fn=self.transfer_fct_conv, normalizer_fn=ly.batch_norm, trainable=trainable, scope='g_fc3')
 
