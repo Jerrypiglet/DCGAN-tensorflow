@@ -373,9 +373,9 @@ def train(gan):
 					print 'Drawing reconstructed sample from testing batch...'
 					plt.figure(1)
 					print G.shape
-					for test_idx in range(2):
+					for test_idx in range(15):
 						im = draw_sample(figM, (G[test_idx].reshape((30, 30, 30)))*0.5+0.5, ms)
-						plt.subplot(1, 2, test_idx+1)
+						plt.subplot(3, 5, test_idx+1)
 						plt.imshow(im)
 						plt.axis('off')
 					pltfig_3d.suptitle('Reconstructed models at step %s of %s'%(step, FLAGS.folder_name_save_to), fontsize=20, fontweight='bold')
