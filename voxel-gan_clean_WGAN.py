@@ -154,7 +154,7 @@ class VariationalAutoencoder(object):
 			## Define net 0
 			# self.x0 = tf.cond(self.train_net, lambda: self.gen.x0_batch, lambda: self.gen.x_gnd_batch) # aligned models
 			self.x0 = 2 * self.gen.x0_batch - 1.# aligned models
-			self.x0 = tf.transpose(self.x0, perm=[0, 2, 3, 1, 4])
+			# self.x0 = tf.transpose(self.x0, perm=[0, 2, 3, 1, 4])
 			self.dyn_batch_size_x0 = tf.shape(self.x0)[0]
 
 		with tf.device('/gpu:0'):
@@ -163,31 +163,35 @@ class VariationalAutoencoder(object):
 
 			# self.flatten_length = 2048
 
-			self.D_logits = self._discriminator(self.x0)
+			self.true_logit = self._discriminator(self.x0)
 			self.G, self.G_noGate = self._generator(self.z)
 			self.G_sum = tf.histogram_summary("G", tf.reshape(self.G_noGate, [-1]))
 
 		with tf.device('/gpu:0'):
-			self.D_logits_ = self._discriminator(self.G, reuse=True)
+			self.fake_logit = self._discriminator(self.G, reuse=True)
 
 	def _create_loss_optimizer(self):
-		self.d_loss_real = tf.reduce_mean(
-			- self.D_logits)
-		self.d_loss_fake = tf.reduce_mean(
-			self.D_logits_)
-		self.d_loss = self.d_loss_real + self.d_loss_fake
-		self.g_loss = tf.reduce_mean(
-			- self.D_logits_)
+		# self.d_loss_real = tf.reduce_mean(
+		# 	- self.D_logits)
+		# self.d_loss_fake = tf.reduce_mean(
+		# 	self.D_logits_)
+		self.d_loss = tf.reduce_mean(self.fake_logit - self.true_logit)
+		self.g_loss = tf.reduce_mean(- self.fake_logit)
 
-		self.d_loss_real_sum = tf.scalar_summary("d_loss_real", self.d_loss_real)
-		self.d_loss_fake_sum = tf.scalar_summary("d_loss_fake", self.d_loss_fake)
+		# self.d_loss_real_sum = tf.scalar_summary("d_loss_real", self.d_loss_real)
+		# self.d_loss_fake_sum = tf.scalar_summary("d_loss_fake", self.d_loss_fake)
 													
 		self.g_loss_sum = tf.scalar_summary("g_loss", self.g_loss)
 		self.d_loss_sum = tf.scalar_summary("d_loss", self.d_loss)
 
 		t_vars = tf.trainable_variables()
-		self.d_vars = [var for var in t_vars if 'discriminator' in var.name]
-		self.g_vars = [var for var in t_vars if 'generator' in var.name]
+		# self.d_vars = [var for var in t_vars if 'discriminator' in var.name]
+		# self.g_vars = [var for var in t_vars if 'generator' in var.name]
+
+		self.g_vars = tf.get_collection(
+			tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
+		self.d_vars = tf.get_collection(
+			tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
 
 		print [var.name for var in t_vars if 'discriminator' in var.name]
 		print [var.name for var in t_vars if 'generator' in var.name]
@@ -209,17 +213,17 @@ class VariationalAutoencoder(object):
 						variables=self.g_vars, global_step=counter_g,
 						summaries = 'gradient_norm')
 
-		counter_c = tf.Variable(trainable=False, initial_value=0, dtype=tf.int32)
-		self.opt_c = ly.optimize_loss(loss=self.d_loss, learning_rate=learning_rate_dis,
+		counter_d = tf.Variable(trainable=False, initial_value=0, dtype=tf.int32)
+		self.opt_d = ly.optimize_loss(loss=self.d_loss, learning_rate=learning_rate_dis,
 						optimizer=tf.train.AdamOptimizer if is_adam is True else tf.train.RMSPropOptimizer, 
-						variables=self.d_vars, global_step=counter_c,
+						variables=self.d_vars, global_step=counter_d,
 						summaries = 'gradient_norm')
 		clipped_var_c = [tf.assign(var, tf.clip_by_value(var, clamp_lower, clamp_upper)) for var in self.d_vars]
 		# merge the clip operations on critic variables
-		with tf.control_dependencies([self.opt_c]):
-			self.opt_c = tf.tuple(clipped_var_c)
+		with tf.control_dependencies([self.opt_d]):
+			self.opt_d = tf.tuple(clipped_var_c)
 
-		self.merged_summary = tf.merge_summary([self.g_loss_sum, self.d_loss_sum, self.z_sum, self.G_sum, self.d_loss_fake_sum, self.d_loss_real_sum])
+		self.merged_summary = tf.merge_summary([self.g_loss_sum, self.d_loss_sum, self.z_sum, self.G_sum])
 
 	def BatchNorm(self, inputT, trainable=True, scope=None, reuse=None):
 		if trainable:
@@ -241,7 +245,7 @@ class VariationalAutoencoder(object):
 				# kernel = tf.Variable(
 				# 	tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
 				# 	trainable=trainable)
-				kernel = tf.get_variable(name=scope+'kernel', initializer=tf.random_normal(kernel_shape, stddev=0.2), trainable=trainable)
+				kernel = tf.get_variable(name=scope+'kernel', initializer=tf.random_normal(kernel_shape, stddev=0.02), trainable=trainable)
 				biases = tf.get_variable(name=scope+'bias', initializer=tf.zeros(shape=[kernel_shape[-1]], dtype=tf.float32), trainable=trainable)
 				if if_batch_norm:
 					current_output = transfer_fct(
@@ -269,23 +273,25 @@ class VariationalAutoencoder(object):
 			# current_input = conv_layer(current_input, [4, 4, 4, 512, 1], [1, 1, 1, 1, 1], 'BN-4', self.transfer_fct_conv, is_training=self.is_training, if_batch_norm=FLAGS.if_BN, padding="SAME", trainable=trainable)
 			# print current_input.get_shape().as_list()
 
-			self.before_flatten_shape = current_input.get_shape().as_list()
-			self.flatten_shape = tf.pack([-1, np.prod(current_input.get_shape().as_list() [1:])])
-			flattened = tf.reshape(current_input, self.flatten_shape)
-			self.flatten_length = flattened.get_shape().as_list()[1]
+			# self.before_flatten_shape = current_input.get_shape().as_list()
+			# self.flatten_shape = tf.pack([-1, np.prod(current_input.get_shape().as_list() [1:])])
+			# flattened = tf.reshape(current_input, self.flatten_shape)
+			# self.flatten_length = flattened.get_shape().as_list()[1]
 
-			print '---------- _>>> discriminator: flatten length:', self.flatten_length
-			hidden_tensor = ly.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, scope='d_fc1')
-			hidden_tensor = ly.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, scope='d_fc2')
-			hidden_tensor = ly.fully_connected(hidden_tensor, 1, activation_fn=None, trainable=trainable, scope='d_fc3')
+			# print '---------- _>>> discriminator: flatten length:', self.flatten_length
+			# hidden_tensor = ly.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, scope='d_fc1')
+			# hidden_tensor = ly.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, scope='d_fc2')
+			# hidden_tensor = ly.fully_connected(hidden_tensor, 1, activation_fn=None, trainable=trainable, scope='d_fc3')
+
+			hidden_tensor = ly.fully_connected(tf.reshape(current_input, tf.pack([tf.shape(current_input)[0], -1])), 1, activation_fn=None)
 			return hidden_tensor
 
 	def _generator(self, input_sample, trainable=True):
 		with tf.variable_scope("generator") as scope:
 			dyn_batch_size = tf.shape(input_sample)[0]
-			hidden_tensor_inv = ly.fully_connected(input_sample, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, scope='g_fc1')
-			hidden_tensor_inv = ly.fully_connected(hidden_tensor_inv, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, scope='g_fc2')
-			hidden_tensor_inv = ly.fully_connected(hidden_tensor_inv, self.flatten_length, activation_fn=self.transfer_fct_conv, trainable=trainable, scope='g_fc3')
+			# hidden_tensor_inv = ly.fully_connected(input_sample, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, scope='g_fc1')
+			# hidden_tensor_inv = ly.fully_connected(hidden_tensor_inv, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, scope='g_fc2')
+			hidden_tensor_inv = ly.fully_connected(input_sample, self.flatten_length, activation_fn=self.transfer_fct_conv, , normalizer_fn=ly.batch_norm, trainable=trainable, scope='g_fc3')
 
 			current_input = tf.reshape(hidden_tensor_inv, [-1, 2, 2, 2, 256])
 			print 'current_input', current_input.get_shape().as_list()
@@ -295,7 +301,7 @@ class VariationalAutoencoder(object):
 				# kernel = tf.Variable(
 				# 	tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
 				# 	trainable=trainable)
-				kernel = tf.Variable(tf.random_normal(kernel_shape, stddev=0.2), name=scope+'kernel')
+				kernel = tf.Variable(tf.random_normal(kernel_shape, stddev=0.02), name=scope+'kernel')
 				biases = tf.Variable(tf.zeros(shape=[kernel_shape[-2]], dtype=tf.float32), trainable=trainable, name=scope+'bias')
 				if if_batch_norm:
 					current_output = transfer_fct(
@@ -383,7 +389,7 @@ def train(gan):
 				# run_options = tf.RunOptions(
 				# 	trace_level=tf.RunOptions.FULL_TRACE)
 				# run_metadata = tf.RunMetadata()
-				_, merged = gan.sess.run([gan.opt_c, gan.merged_summary], feed_dict=feed_dict)
+				_, merged = gan.sess.run([gan.opt_d, gan.merged_summary], feed_dict=feed_dict)
 									 # options=run_options, run_metadata=run_metadata)
 				# gan.train_writer.add_summary(merged, i)
 				# gan.train_writer.add_run_metadata(
