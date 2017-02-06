@@ -249,7 +249,8 @@ class VariationalAutoencoder(object):
 				kernel = tf.get_variable(name=scope+'kernel', initializer=tf.random_normal(kernel_shape, stddev=0.02), trainable=trainable)
 				biases = tf.get_variable(name=scope+'bias', initializer=tf.zeros(shape=[kernel_shape[-1]], dtype=tf.float32), trainable=trainable)
 
-				self.kernel_summary.append(tf.histogram_summary(scope+'kernel', tf.reshape(kernel, [-1])))
+				if reuse==False:
+					self.kernel_summary.append(tf.histogram_summary(scope+'kernel', tf.reshape(kernel, [-1])))
 				if if_batch_norm:
 					current_output = transfer_fct(
 						self.BatchNorm(
