@@ -342,7 +342,7 @@ def train(gan):
 			def write_to_screen(merged):
 				start_time = time.time()
 				feed_dict = next_feed_dict()
-				G, d_loss, g_loss, step = gan.sess.run([gan.G, gan.d_loss, gan.g_loss, gan.global_step], feed_dict=feed_dict)
+				G, x0, d_loss, g_loss, step = gan.sess.run([gan.G, gan.x0, gan.d_loss, gan.g_loss, gan.global_step], feed_dict=feed_dict)
 
 				gan.train_writer.add_summary(merged, step)
 
@@ -363,7 +363,7 @@ def train(gan):
 					plt.figure(1)
 					print G.shape
 					for test_idx in range(2):
-						im = draw_sample(figM, (G[test_idx].reshape((30, 30, 30)))*0.5+0.5, ms)
+						im = draw_sample(figM, (x0[test_idx].reshape((30, 30, 30)))*0.5+0.5, ms)
 						plt.subplot(1, 2, test_idx+1)
 						plt.imshow(im)
 						plt.axis('off')
