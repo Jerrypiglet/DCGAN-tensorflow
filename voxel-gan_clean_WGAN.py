@@ -202,8 +202,8 @@ class VariationalAutoencoder(object):
 		# update Citers times of critic in one iter(unless i < 25 or i % 500 == 0, i is iterstep)
 		self.Citers = 5
 		# the upper bound and lower bound of parameters in critic
-		clamp_lower = -0.01
-		clamp_upper = 0.01
+		clamp_lower = -0.1
+		clamp_upper = 0.1
 		# whether to use adam for parameter update, if the flag is set False, use tf.train.RMSPropOptimizer
 		# as recommended in paper
 		is_adam = False
@@ -219,10 +219,10 @@ class VariationalAutoencoder(object):
 						optimizer=tf.train.AdamOptimizer if is_adam is True else tf.train.RMSPropOptimizer, 
 						variables=self.d_vars, global_step=counter_d,
 						summaries = 'gradient_norm')
-		# clipped_var_c = [tf.assign(var, tf.clip_by_value(var, clamp_lower, clamp_upper)) for var in self.d_vars]
-		# # merge the clip operations on critic variables
-		# with tf.control_dependencies([self.opt_d]):
-		# 	self.opt_d = tf.tuple(clipped_var_c)
+		clipped_var_c = [tf.assign(var, tf.clip_by_value(var, clamp_lower, clamp_upper)) for var in self.d_vars]
+		# merge the clip operations on critic variables
+		with tf.control_dependencies([self.opt_d]):
+			self.opt_d = tf.tuple(clipped_var_c)
 
 		self.merged_summary = tf.merge_summary([self.g_loss_sum, self.d_loss_sum, self.z_sum, self.G_sum] + self.kernel_summary)
 
