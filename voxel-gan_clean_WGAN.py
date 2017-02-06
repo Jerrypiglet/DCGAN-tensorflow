@@ -247,7 +247,7 @@ class VariationalAutoencoder(object):
 				# kernel = tf.Variable(
 				# 	tf.random_uniform(kernel_shape, -1.0 / (math.sqrt(kernel_shape[3]) + 10), 1.0 / (math.sqrt(kernel_shape[3]) + 10)), 
 				# 	trainable=trainable)
-				kernel = tf.get_variable(name=scope+'kernel', initializer=tf.random_normal(kernel_shape, stddev=0.015), trainable=trainable)
+				kernel = tf.get_variable(name=scope+'kernel', initializer=tf.random_normal(kernel_shape, stddev=0.02), trainable=trainable)
 				biases = tf.get_variable(name=scope+'bias', initializer=tf.zeros(shape=[kernel_shape[-1]], dtype=tf.float32), trainable=trainable)
 
 				if reuse==False:
@@ -284,7 +284,7 @@ class VariationalAutoencoder(object):
 			self.flatten_length = flattened.get_shape().as_list()[1]
 
 			print '---------- _>>> discriminator: flatten length:', self.flatten_length
-			hidden_tensor = ly.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, trainable=trainable, scope='d_fc1')
+			hidden_tensor = ly.fully_connected(flattened, self.flatten_length//2, activation_fn=self.transfer_fct_conv, normalizer_fn=ly.batch_norm, trainable=trainable, scope='d_fc1')
 			hidden_tensor = ly.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, scope='d_fc2')
 			hidden_tensor = ly.fully_connected(hidden_tensor, 1, activation_fn=None, trainable=trainable, scope='d_fc3')
 
