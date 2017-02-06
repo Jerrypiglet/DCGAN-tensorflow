@@ -162,6 +162,7 @@ class VariationalAutoencoder(object):
 			self.z_sum = tf.histogram_summary("z", self.z)
 
 			# self.flatten_length = 2048
+			self.kernel_summary = []
 
 			self.true_logit = self._discriminator(self.x0)
 			self.G, self.G_noGate = self._generator(self.z)
@@ -223,7 +224,7 @@ class VariationalAutoencoder(object):
 		with tf.control_dependencies([self.opt_d]):
 			self.opt_d = tf.tuple(clipped_var_c)
 
-		self.merged_summary = tf.merge_summary([self.g_loss_sum, self.d_loss_sum, self.z_sum, self.G_sum])
+		self.merged_summary = tf.merge_summary([self.g_loss_sum, self.d_loss_sum, self.z_sum, self.G_summ self.kernel_summary])
 
 	def BatchNorm(self, inputT, trainable=True, scope=None, reuse=None):
 		if trainable:
@@ -247,6 +248,8 @@ class VariationalAutoencoder(object):
 				# 	trainable=trainable)
 				kernel = tf.get_variable(name=scope+'kernel', initializer=tf.random_normal(kernel_shape, stddev=0.02), trainable=trainable)
 				biases = tf.get_variable(name=scope+'bias', initializer=tf.zeros(shape=[kernel_shape[-1]], dtype=tf.float32), trainable=trainable)
+
+				self.kernel_summary.append(tf.histogram_summary(scope+'kernel', tf.reshape(kernel, [-1])))
 				if if_batch_norm:
 					current_output = transfer_fct(
 						self.BatchNorm(
