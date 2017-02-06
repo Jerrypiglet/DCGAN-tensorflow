@@ -274,7 +274,7 @@ class VariationalAutoencoder(object):
 			# print current_input.get_shape().as_list()
 
 			# self.before_flatten_shape = current_input.get_shape().as_list()
-			# self.flatten_shape = tf.pack([-1, np.prod(current_input.get_shape().as_list() [1:])])
+			self.flatten_shape = tf.pack([-1, np.prod(current_input.get_shape().as_list() [1:])])
 			# flattened = tf.reshape(current_input, self.flatten_shape)
 			# self.flatten_length = flattened.get_shape().as_list()[1]
 
@@ -283,7 +283,7 @@ class VariationalAutoencoder(object):
 			# hidden_tensor = ly.fully_connected(hidden_tensor, self.flatten_length//4, activation_fn=self.transfer_fct_conv, trainable=trainable, scope='d_fc2')
 			# hidden_tensor = ly.fully_connected(hidden_tensor, 1, activation_fn=None, trainable=trainable, scope='d_fc3')
 
-			hidden_tensor = ly.fully_connected(tf.reshape(current_input, tf.pack([tf.shape(current_input)[0], -1])), 1, activation_fn=None)
+			hidden_tensor = ly.fully_connected(tf.reshape(current_input, self.flatten_shape), 1, activation_fn=None)
 			return hidden_tensor
 
 	def _generator(self, input_sample, trainable=True):
